@@ -1,12 +1,12 @@
 [server]
-port = 8501
 headless = true
 enableCORS = false
 enableXsrfProtection = false
+fileWatcherType = "none"
 maxUploadSize = 25
 
 [theme]
-primaryColor = "#6366f1"
+primaryColor = "#00f2fe"
 backgroundColor = "#0b0f19"
 secondaryBackgroundColor = "#1e293b"
 textColor = "#f8fafc"
