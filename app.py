@@ -4,26 +4,8 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import streamlit as st
-import cv2
-import numpy as np
-from PIL import Image
-import sys
-import json
-import time
-import base64
-import av
-import plotly.graph_objects as go
-import plotly.express as px
 
-# Ensure src modules are importable
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
-from src.inference import EmotionEngine, EMOTION_COLORS
-from src.models import EMOTION_DICT
-
-# -----------------------------------------------------------------------------
-# Page Configuration & Styling
-# -----------------------------------------------------------------------------
+# Page Configuration MUST be the first Streamlit command
 ICON_PATH = "assets/logo/decodex_icon.png"
 BANNER_PATH = "assets/logo/decodex_banner.png"
 
@@ -33,6 +15,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+import cv2
+import numpy as np
+from PIL import Image
+import sys
+import json
+import time
+import base64
+import plotly.graph_objects as go
+import plotly.express as px
+
+# Ensure src modules are importable
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 def get_base64_img(img_path):
     if os.path.exists(img_path):
@@ -251,6 +246,7 @@ EMOTION_META = {
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def load_engine(model_type, detector_type, weights_path):
+    from src.inference import EmotionEngine
     return EmotionEngine(
         model_path=weights_path,
         model_type=model_type,
@@ -449,6 +445,7 @@ def main():
             st.write("Click **START** below to begin real-time facial expression classification:")
 
             try:
+                import av
                 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
                 RTC_CONFIG = RTCConfiguration(
