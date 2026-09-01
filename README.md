@@ -40,8 +40,8 @@ A deep learning facial expression recognition system capable of classifying huma
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Decoder420/Emotion-Detection-using-Facial-Recognition-.git
-   cd Emotion-Detection-using-Facial-Recognition-
+   git clone https://github.com/Decoder420/DecodeX-EmoVision-AI-.git
+   cd DecodeX-EmoVision-AI-
    ```
 
 2. **Create a virtual environment (Python 3.10–3.12 recommended):**
