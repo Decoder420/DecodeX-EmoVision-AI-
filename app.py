@@ -179,9 +179,6 @@ def load_engine(model_type, detector_type, weights_path):
     )
 
 def plot_emotion_radar(probabilities):
-    """
-    Creates an interactive Plotly Radar Chart for 7-emotion spectrum.
-    """
     categories = list(probabilities.keys())
     values = [probabilities[c] * 100 for c in categories]
     categories.append(categories[0])
@@ -221,9 +218,6 @@ def plot_emotion_radar(probabilities):
     return fig
 
 def plot_emotion_bars(probabilities):
-    """
-    Creates an interactive Plotly Horizontal Bar Chart with distinct colors.
-    """
     emotions = list(probabilities.keys())
     probs = [probabilities[e] * 100 for e in emotions]
     colors = [EMOTION_META.get(e, {}).get("color", "#6366f1") for e in emotions]
@@ -333,10 +327,10 @@ def main():
 
         detector_choice = st.selectbox(
             "Face Detector Backend",
-            options=["MediaPipe Face Detection", "OpenCV Haar Cascade"],
+            options=["OpenCV Haar Cascade (Fastest)", "MediaPipe Face Detection"],
             index=0
         )
-        detector_type = "mediapipe" if "MediaPipe" in detector_choice else "haar"
+        detector_type = "haar" if "Haar" in detector_choice else "mediapipe"
 
         weights_path = st.text_input("Trained Model Weights", value="model.h5")
         if os.path.exists(weights_path):
@@ -362,9 +356,8 @@ def main():
     engine = load_engine(model_type, detector_type, weights_path)
 
     # Interactive Navigation Tabs
-    tab_holo, tab_live, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
-        "🦾 Iron Man Holo-HUD",
-        "📹 Live Video Stream",
+    tab_stream, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
+        "📹 Live Video Stream & Holo-HUD",
         "✨ One-Click Demo Faces",
         "🖼️ Image Analysis & Export",
         "📸 Camera Snapshot",
@@ -372,13 +365,20 @@ def main():
     ])
 
     # -------------------------------------------------------------------------
-    # TAB 1: Iron Man Hologram HUD Live Stream
+    # TAB 1: Unified Live Video Stream (HUD & Standard)
     # -------------------------------------------------------------------------
-    with tab_holo:
-        c_h1, c_h2 = st.columns([1.35, 0.65])
-        with c_h1:
-            st.markdown("#### 🦾 Iron Man Gesture-Controlled Holo-HUD")
-            st.write("Click **START** below to launch the live holographic HUD. Position your face and use hand gestures (pinch, open palm, horizontal swipe) to control the interface in real time!")
+    with tab_stream:
+        c_mode, c_help = st.columns([1.35, 0.65])
+        with c_mode:
+            view_mode = st.radio(
+                "Select Display Mode:",
+                options=["🦾 Iron Man Hologram HUD (Hand Gestures + Face Reticle)", "🎯 Standard Emotion Bounding Boxes"],
+                index=0,
+                horizontal=True
+            )
+            is_holo_mode = "Hologram" in view_mode
+
+            st.write("Click **START** below to launch live camera streaming. Position your face and try gestures!")
 
             try:
                 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
@@ -387,7 +387,7 @@ def main():
                     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
                 )
 
-                class HoloHUDStreamProcessor(VideoProcessorBase):
+                class UnifiedStreamProcessor(VideoProcessorBase):
                     def __init__(self):
                         self.engine = engine
                         self.hand_tracker = HandTracker(max_num_hands=2, smooth_alpha=0.65)
@@ -395,98 +395,81 @@ def main():
                         self.hud_renderer = HUDRenderer()
                         self.frame_count = 0
                         self.cached_faces = []
+                        self.holo_mode = is_holo_mode
 
                     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-                        img = frame.to_ndarray(format="bgr24")
-                        # Mirror for intuitive interaction
-                        img = cv2.flip(img, 1)
-                        self.frame_count += 1
+                        try:
+                            img = frame.to_ndarray(format="bgr24")
+                            # Resize to stable 640x480 for ultra-fluid processing
+                            h, w = img.shape[:2]
+                            if w > 640:
+                                scale = 640.0 / w
+                                img = cv2.resize(img, (640, int(h * scale)), interpolation=cv2.INTER_LINEAR)
 
-                        # Cadence interleaving: face detection every 2 frames
-                        if self.frame_count % 2 == 0 or not self.cached_faces:
-                            _, self.cached_faces = self.engine.process_frame(img, draw_annotations=False)
+                            img = cv2.flip(img, 1)
+                            self.frame_count += 1
 
-                        # Hand tracking on every frame
-                        face_bboxes = [f["bbox"] for f in self.cached_faces]
-                        hands_data = self.hand_tracker.process_frame(img, face_bboxes=face_bboxes)
-                        gesture_state = self.gesture_engine.analyze(hands_data)
+                            if is_holo_mode:
+                                # Cadence interleaving: face detection every 2 frames
+                                if self.frame_count % 2 == 0 or not self.cached_faces:
+                                    _, self.cached_faces = self.engine.process_frame(img, draw_annotations=False)
 
-                        # Render Sci-Fi HUD
-                        rendered = self.hud_renderer.render(img, self.cached_faces, hands_data, gesture_state)
-                        return av.VideoFrame.from_ndarray(rendered, format="bgr24")
+                                face_bboxes = [f["bbox"] for f in self.cached_faces]
+                                hands_data = self.hand_tracker.process_frame(img, face_bboxes=face_bboxes)
+                                gesture_state = self.gesture_engine.analyze(hands_data)
+                                rendered = self.hud_renderer.render(img, self.cached_faces, hands_data, gesture_state)
+                            else:
+                                rendered, _ = self.engine.process_frame(img, draw_annotations=True)
 
-                webrtc_streamer(
-                    key="holo-hud-stream",
-                    video_processor_factory=HoloHUDStreamProcessor,
-                    rtc_configuration=RTC_CONFIG,
-                    media_stream_constraints={"video": True, "audio": False}
-                )
-            except Exception as e:
-                st.error(f"Holo-HUD Error: {e}")
-
-        with c_h2:
-            st.markdown("#### 🎮 Gesture Controls")
-            st.markdown("""
-            <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                <div style="font-weight: 700; color: #00f2fe;">🤏 PINCH (CLICK)</div>
-                <div style="font-size: 0.85rem; color: #cbd5e1;">Bring thumb & index tips close together to activate the magenta click crosshair.</div>
-            </div>
-            <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                <div style="font-weight: 700; color: #ff0844;">🖐️ OPEN PALM (RESET)</div>
-                <div style="font-size: 0.85rem; color: #cbd5e1;">Open your hand wide with all 4 fingers spread to reset floating cards.</div>
-            </div>
-            <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                <div style="font-weight: 700; color: #34d399;">↔️ HORIZONTAL SWIPE</div>
-                <div style="font-size: 0.85rem; color: #cbd5e1;">Move your index fingertip across the frame to switch HUD modes.</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # -------------------------------------------------------------------------
-    # TAB 2: Live WebRTC Video Stream (Standard)
-    # -------------------------------------------------------------------------
-    with tab_live:
-        col_stream, col_telemetry = st.columns([1.3, 0.7])
-
-        with col_stream:
-            st.markdown("#### 🎥 Standard Live Video Stream")
-            st.write("Click **START** to stream real-time facial expression detections directly in the browser.")
-
-            try:
-                from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
-
-                RTC_CONFIG = RTCConfiguration(
-                    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-                )
-
-                class StreamProcessor(VideoProcessorBase):
-                    def __init__(self):
-                        self.engine = engine
-
-                    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-                        img = frame.to_ndarray(format="bgr24")
-                        annotated, _ = self.engine.process_frame(img, draw_annotations=True)
-                        return av.VideoFrame.from_ndarray(annotated, format="bgr24")
+                            return av.VideoFrame.from_ndarray(rendered, format="bgr24")
+                        except Exception as err:
+                            # If any unexpected frame error occurs, return original frame without crashing
+                            return frame
 
                 webrtc_streamer(
-                    key="live-emotion-stream",
-                    video_processor_factory=StreamProcessor,
+                    key="unified-emotion-stream",
+                    video_processor_factory=UnifiedStreamProcessor,
                     rtc_configuration=RTC_CONFIG,
-                    media_stream_constraints={"video": True, "audio": False}
+                    media_stream_constraints={
+                        "video": {
+                            "width": {"ideal": 640},
+                            "height": {"ideal": 480},
+                            "frameRate": {"ideal": 30}
+                        },
+                        "audio": False
+                    },
+                    async_processing=True
                 )
             except Exception as e:
-                st.error(f"WebRTC Error: {e}")
+                st.error(f"Live Stream Error: {e}")
 
-        with col_telemetry:
-            st.markdown("#### 💡 Telemetry & Best Practices")
-            st.markdown("""
-            - **Lighting**: Ensure your face is evenly illuminated for optimal boundary detection.
-            - **Positioning**: Center your face within the camera frame.
-            - **Continuous Video Window**: For maximum framerate (60+ FPS native hardware accelerated), run:
-            """)
-            st.code("python emotions.py --mode display --detector mediapipe", language="bash")
+        with c_help:
+            st.markdown("#### 🎮 Controls & Telemetry")
+            if is_holo_mode:
+                st.markdown("""
+                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
+                    <div style="font-weight: 700; color: #00f2fe;">🤏 PINCH (CLICK)</div>
+                    <div style="font-size: 0.85rem; color: #cbd5e1;">Bring thumb & index tips close together to activate the magenta click crosshair.</div>
+                </div>
+                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
+                    <div style="font-weight: 700; color: #ff0844;">🖐️ OPEN PALM (RESET)</div>
+                    <div style="font-size: 0.85rem; color: #cbd5e1;">Open your hand wide with all 4 fingers spread to reset floating cards.</div>
+                </div>
+                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
+                    <div style="font-weight: 700; color: #34d399;">↔️ HORIZONTAL SWIPE</div>
+                    <div style="font-size: 0.85rem; color: #cbd5e1;">Move your index fingertip across the frame to switch HUD modes.</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                - **Lighting**: Ensure your face is evenly illuminated for optimal boundary detection.
+                - **Positioning**: Center your face within the camera frame.
+                - **Continuous Video Window**: For native 60 FPS hardware accelerated desktop execution, run:
+                """)
+                st.code("python emotions.py --mode display", language="bash")
 
     # -------------------------------------------------------------------------
-    # TAB 3: One-Click Demo Presets
+    # TAB 2: One-Click Demo Presets
     # -------------------------------------------------------------------------
     with tab_demo:
         st.markdown("#### ✨ One-Click Sample Face Gallery")
@@ -533,7 +516,7 @@ def main():
                     st.plotly_chart(plot_emotion_radar(top_res["probabilities"]), use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # TAB 4: Image Upload & Full Analytics Export
+    # TAB 3: Image Upload & Full Analytics Export
     # -------------------------------------------------------------------------
     with tab_upload:
         st.markdown("#### 🖼️ High-Resolution Photo Analysis & Export")
@@ -589,7 +572,7 @@ def main():
                     )
 
     # -------------------------------------------------------------------------
-    # TAB 5: Snapshot Mode
+    # TAB 4: Snapshot Mode
     # -------------------------------------------------------------------------
     with tab_snapshot:
         st.markdown("#### 📸 Single Snapshot Photo Analysis")
@@ -617,7 +600,7 @@ def main():
                         st.plotly_chart(plot_emotion_bars(res["probabilities"]), use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # TAB 6: Architecture & Telemetry
+    # TAB 5: Architecture & Telemetry
     # -------------------------------------------------------------------------
     with tab_info:
         st.markdown("#### 🧠 Neural Architecture & Telemetry Benchmarks")
@@ -629,7 +612,7 @@ def main():
         | **Parameters** | 2,345,607 weights | Optimized for low parameter size and sub-3ms latency |
         | **Mean Inference Time** | 2.66 ms / 376 FPS | High throughput real-time execution |
         | **Face Detectors** | MediaPipe SSD & Haar Cascade | Dual backend with automatic fallback for high angle resilience |
-        | **Hand Tracking** | 21-Landmark MediaPipe | Real-time touchless gesture control with EMA smoothing |
+        | **Hand Tracking** | 21-Landmark Kinematic Engine | Real-time touchless gesture control with EMA smoothing |
         """)
 
 if __name__ == '__main__':
