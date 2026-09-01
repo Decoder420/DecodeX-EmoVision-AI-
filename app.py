@@ -22,7 +22,6 @@ from src.models import EMOTION_DICT
 # -----------------------------------------------------------------------------
 ICON_PATH = "assets/logo/decodex_icon.png"
 LOGO_PATH = "assets/logo/decodex_logo.png"
-BADGE_PATH = "assets/logo/decodex_badge.png"
 
 st.set_page_config(
     page_title="DecodeX EmoVision AI | Facial Emotion Intelligence",
@@ -39,10 +38,8 @@ def get_base64_img(img_path):
     return ""
 
 logo_b64 = get_base64_img(LOGO_PATH)
-badge_b64 = get_base64_img(BADGE_PATH)
-icon_b64 = get_base64_img(ICON_PATH)
 
-# Custom Glassmorphism & Modern Dark Theme tailored for DecodeX
+# Custom Glassmorphism & Symmetrical Dark Theme tailored for DecodeX
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -55,15 +52,16 @@ st.markdown(f"""
         font-family: 'JetBrains Mono', monospace !important;
     }}
     
-    /* Top Hero Banner */
+    /* Centered Symmetrical Hero Banner */
     .decodex-hero {{
-        background: linear-gradient(135deg, #090d16 0%, #0f172a 45%, #162038 85%, #0e1e38 100%);
+        background: linear-gradient(180deg, #0a0f1d 0%, #0d1527 50%, #080c18 100%);
         border-radius: 20px;
-        padding: 2.2rem 2.8rem;
+        padding: 2.2rem 2rem;
         color: white;
         margin-bottom: 1.8rem;
-        box-shadow: 0 20px 45px -15px rgba(0, 242, 254, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-        border: 1px solid rgba(0, 242, 254, 0.25);
+        box-shadow: 0 20px 45px -15px rgba(0, 242, 254, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(0, 242, 254, 0.22);
+        text-align: center;
         position: relative;
         overflow: hidden;
     }}
@@ -71,28 +69,29 @@ st.markdown(f"""
     .decodex-hero::before {{
         content: "";
         position: absolute;
-        top: 0; left: 0; right: 0; height: 3px;
-        background: linear-gradient(90deg, transparent, #00f2fe, #4facfe, transparent);
+        top: 0; left: 10%; right: 10%; height: 2px;
+        background: linear-gradient(90deg, transparent, #00f2fe, #38bdf8, transparent);
     }}
     
     .decodex-hero::after {{
         content: "";
         position: absolute;
-        top: -50%;
-        right: -15%;
-        width: 450px;
-        height: 450px;
-        background: radial-gradient(circle, rgba(0, 242, 254, 0.18) 0%, rgba(0,0,0,0) 70%);
+        top: -40%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 500px;
+        height: 250px;
+        background: radial-gradient(ellipse, rgba(0, 242, 254, 0.15) 0%, rgba(0,0,0,0) 70%);
         border-radius: 50%;
         pointer-events: none;
     }}
     
-    /* Metric Cards */
+    /* Symmetrical Metric Cards */
     .stat-card {{
         background: rgba(15, 23, 42, 0.65);
         backdrop-filter: blur(16px);
         border-radius: 14px;
-        padding: 1.2rem;
+        padding: 1.2rem 1rem;
         border: 1px solid rgba(0, 242, 254, 0.15);
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         text-align: center;
@@ -113,7 +112,7 @@ st.markdown(f"""
         letter-spacing: 0.02em;
     }}
     .stat-label {{
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: #94a3b8;
         font-weight: 600;
         text-transform: uppercase;
@@ -121,19 +120,20 @@ st.markdown(f"""
         margin-top: 0.25rem;
     }}
     
-    /* Live Status Indicator */
+    /* Symmetrical Status Indicator */
     .status-badge {{
         display: inline-flex;
         align-items: center;
         gap: 0.45rem;
         background: rgba(0, 242, 254, 0.12);
         color: #00f2fe;
-        padding: 0.35rem 0.85rem;
+        padding: 0.35rem 0.9rem;
         border-radius: 9999px;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 700;
         border: 1px solid rgba(0, 242, 254, 0.35);
         font-family: 'JetBrains Mono', monospace;
+        margin-top: 0.6rem;
     }}
     .status-dot {{
         width: 8px;
@@ -143,12 +143,23 @@ st.markdown(f"""
         box-shadow: 0 0 10px #00f2fe;
     }}
     
+    /* Content Glass Panels */
+    .glass-panel {{
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(16px);
+        border-radius: 16px;
+        padding: 1.4rem;
+        border: 1px solid rgba(0, 242, 254, 0.15);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        height: 100%;
+    }}
+    
     /* Dominant Emotion Card */
     .emotion-highlight-card {{
-        background: rgba(15, 23, 42, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         border-radius: 16px;
         padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(0, 242, 254, 0.2);
         text-align: center;
         margin-bottom: 1rem;
         box-shadow: 0 10px 25px rgba(0,0,0,0.4);
@@ -164,15 +175,17 @@ st.markdown(f"""
     /* Custom tabs styling */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
+        justify-content: center;
+        margin-bottom: 1.5rem;
     }}
     .stTabs [data-baseweb="tab"] {{
-        height: 48px;
+        height: 46px;
         border-radius: 10px;
-        padding: 0 20px;
+        padding: 0 22px;
         background-color: rgba(15, 23, 42, 0.5);
         border: 1px solid rgba(0, 242, 254, 0.12);
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 0.92rem;
     }}
     .stTabs [aria-selected="true"] {{
         background-color: #0e375e !important;
@@ -286,34 +299,27 @@ def plot_emotion_bars(probabilities):
 # Main Application
 # -----------------------------------------------------------------------------
 def main():
-    # Top Hero Banner with DecodeX Logo
-    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="height: 48px; object-fit: contain; margin-bottom: 0.5rem;" alt="DecodeX Logo" />' if logo_b64 else '<h1 style="margin:0; font-family: Orbitron; color: #00f2fe;">DecodeX</h1>'
+    # Centered Symmetrical Header with Single Clean DecodeX Logo
+    logo_img_tag = f'<img src="data:image/png;base64,{logo_b64}" style="height: 52px; object-fit: contain; margin-bottom: 0.8rem; filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.3));" alt="DecodeX Logo" />' if logo_b64 else '<h1 style="margin:0; font-family: Orbitron; color: #00f2fe;">DecodeX</h1>'
 
     st.markdown(f"""
     <div class="decodex-hero">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem;">
+        <div style="max-width: 780px; margin: 0 auto;">
+            {logo_img_tag}
+            <h1 style="margin: 0.2rem 0; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.01em;">
+                EmoVision <span style="color: #00f2fe; font-family: 'Orbitron', sans-serif;">AI</span>
+            </h1>
+            <p style="margin: 0.4rem 0 0.8rem 0; font-size: 1.05rem; color: #94a3b8;">
+                Real-time deep learning facial emotion perception, expression intelligence, and multi-face telemetry.
+            </p>
             <div>
-                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                    {logo_html}
-                    <span class="status-badge"><span class="status-dot"></span> NEURAL ENGINE ONLINE</span>
-                </div>
-                <h1 style="margin: 0.3rem 0 0.5rem 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.01em;">
-                    EmoVision <span style="color: #00f2fe; font-family: 'Orbitron', sans-serif;">AI</span>
-                </h1>
-                <p style="margin: 0; font-size: 1.05rem; opacity: 0.85; max-width: 680px; color: #cbd5e1;">
-                    Next-generation deep learning facial emotion perception, expression intelligence, and multi-face probability telemetry.
-                </p>
-            </div>
-            <div style="text-align: right; background: rgba(15, 23, 42, 0.5); padding: 1rem 1.4rem; border-radius: 12px; border: 1px solid rgba(0, 242, 254, 0.2);">
-                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;">Architecture</div>
-                <div style="font-size: 1.15rem; font-weight: 800; color: #00f2fe; font-family: 'Orbitron', sans-serif;">4-Block CNN</div>
-                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;">By DecodeX Intelligence</div>
+                <span class="status-badge"><span class="status-dot"></span> NEURAL ENGINE ONLINE // 4-BLOCK CNN</span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Top KPI Metrics Row
+    # Symmetrical 4-KPI Metrics Row
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         st.markdown("""
@@ -339,23 +345,16 @@ def main():
     with m4:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-value">Dual Backend</div>
+            <div class="stat-value">Dual Engine</div>
             <div class="stat-label">MediaPipe + Haar</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
 
-    # Sidebar Controls
+    # Sidebar Controls (Clean & Uncluttered, No Duplicate Logo)
     with st.sidebar:
-        if badge_b64:
-            st.markdown(f"""
-            <div style="text-align: center; margin-bottom: 1rem;">
-                <img src="data:image/png;base64,{badge_b64}" style="max-width: 170px; height: auto; filter: drop-shadow(0 0 12px rgba(0, 242, 254, 0.35));" alt="DecodeX Badge" />
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("### ⚙️ Engine Configuration")
+        st.markdown("### ⚙️ Engine Settings")
         
         model_choice = st.selectbox(
             "Neural Classifier",
@@ -385,7 +384,7 @@ def main():
     # Load Engine
     engine = load_engine(model_type, detector_type, weights_path)
 
-    # Interactive Navigation Tabs
+    # Symmetrical Navigation Tabs
     tab_live, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
         "📹 Live Video Stream",
         "✨ One-Click Demo Faces",
@@ -395,13 +394,13 @@ def main():
     ])
 
     # -------------------------------------------------------------------------
-    # TAB 1: Live Video Stream
+    # TAB 1: Live Video Stream (Symmetrical 50 / 50 Split)
     # -------------------------------------------------------------------------
     with tab_live:
-        c_stream, c_info = st.columns([1.35, 0.65])
+        c_stream, c_info = st.columns([1, 1])
         with c_stream:
-            st.markdown("#### 🎥 Real-Time Facial Emotion Stream")
-            st.write("Click **START** below to stream real-time facial expression detections directly in your browser.")
+            st.markdown("#### 🎥 Live Camera Stream")
+            st.write("Click **START** below to begin real-time facial expression classification:")
 
             try:
                 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
@@ -447,18 +446,25 @@ def main():
         with c_info:
             st.markdown("#### 💡 Telemetry & Instructions")
             st.markdown("""
-            - **Lighting**: Ensure your face is evenly illuminated for crisp boundary detection.
-            - **Positioning**: Center your face in front of the camera.
-            - **Native 60 FPS Desktop Window**: Run anytime via terminal:
-            """)
+            <div class="glass-panel">
+                <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.5rem; font-family: 'Orbitron', sans-serif;">STREAM GUIDELINES</div>
+                <p style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 0.8rem;">
+                    • <strong>Lighting</strong>: Ensure even facial lighting without harsh backlights.<br>
+                    • <strong>Framing</strong>: Position your face centered within the frame.<br>
+                    • <strong>Multi-Face</strong>: Supports simultaneous multi-person emotion tagging.
+                </p>
+                <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.4rem; font-family: 'Orbitron', sans-serif;">DESKTOP WINDOW</div>
+                <p style="font-size: 0.85rem; color: #94a3b8;">For hardware-accelerated 60 FPS OpenCV display, run:</p>
+            </div>
+            """, unsafe_allow_html=True)
             st.code("python emotions.py --mode display", language="bash")
 
     # -------------------------------------------------------------------------
-    # TAB 2: One-Click Demo Presets
+    # TAB 2: One-Click Demo Presets (Symmetrical 4-Column Gallery)
     # -------------------------------------------------------------------------
     with tab_demo:
         st.markdown("#### ✨ One-Click Sample Face Gallery")
-        st.write("Test the neural classification engine immediately by selecting any generated facial expression sample:")
+        st.write("Test the neural classification engine immediately on pre-loaded expression samples:")
 
         sample_cols = st.columns(4)
         samples = [
@@ -501,7 +507,7 @@ def main():
                     st.plotly_chart(plot_emotion_radar(top_res["probabilities"]), use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # TAB 3: Image Upload & Full Analytics Export
+    # TAB 3: Image Upload & Full Analytics Export (Symmetrical 50 / 50 Split)
     # -------------------------------------------------------------------------
     with tab_upload:
         st.markdown("#### 🖼️ High-Resolution Photo Analysis & Export")
@@ -520,7 +526,7 @@ def main():
 
             st.success(f"⚡ Inference completed in **{t_infer:.2f} ms** — Found **{len(results)}** face(s).")
 
-            c_left, c_right = st.columns([1.2, 1])
+            c_left, c_right = st.columns([1, 1])
             with c_left:
                 st.image(annotated_rgb, caption=f"Analyzed Image ({img_np.shape[1]}x{img_np.shape[0]})", use_container_width=True)
 
@@ -557,7 +563,7 @@ def main():
                     )
 
     # -------------------------------------------------------------------------
-    # TAB 4: Snapshot Mode
+    # TAB 4: Snapshot Mode (Symmetrical 50 / 50 Split)
     # -------------------------------------------------------------------------
     with tab_snapshot:
         st.markdown("#### 📸 Single Snapshot Photo Analysis")
@@ -571,7 +577,7 @@ def main():
             annotated_cam_bgr, cam_results = engine.process_frame(cam_bgr, draw_annotations=True)
             annotated_cam_rgb = cv2.cvtColor(annotated_cam_bgr, cv2.COLOR_BGR2RGB)
 
-            c_cam_img, c_cam_res = st.columns([1.2, 1])
+            c_cam_img, c_cam_res = st.columns([1, 1])
             with c_cam_img:
                 st.image(annotated_cam_rgb, caption="Snapshot Result", use_container_width=True)
 
