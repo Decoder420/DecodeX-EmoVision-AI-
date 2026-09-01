@@ -380,8 +380,8 @@ def main():
     with m4:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-value">Dual Engine</div>
-            <div class="stat-label">MediaPipe + Haar</div>
+            <div class="stat-value">Haar Cascade</div>
+            <div class="stat-label">Fast Face Detector</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -414,7 +414,7 @@ def main():
 
         weights_path = st.text_input("Trained Model Weights", value="model.h5")
         if os.path.exists(weights_path):
-            st.caption(f"🟢 **Weights Loaded**: `{weights_path}` (9.4 MB)")
+            st.caption(f"🟢 **Weights Loaded**: `{weights_path}` (9.0 MB)")
         else:
             st.caption(f"🔴 **Warning**: `{weights_path}` not found.")
 
@@ -427,95 +427,67 @@ def main():
     engine = load_engine(model_type, detector_type, weights_path)
 
     # Symmetrical Navigation Tabs
-    tab_live, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
-        "📹 Live Video Stream",
+    tab_cam, tab_demo, tab_upload, tab_info = st.tabs([
+        "📸 Live Camera & Webcam",
         "✨ One-Click Demo Faces",
         "🖼️ Image Analysis & Export",
-        "📸 Camera Snapshot",
         "ℹ️ Architecture & Telemetry"
     ])
 
     # -------------------------------------------------------------------------
-    # TAB 1: Live Video Stream (Symmetrical 50 / 50 Split)
+    # TAB 1: Live Camera & Webcam (Symmetrical 50 / 50 Split)
     # -------------------------------------------------------------------------
-    with tab_live:
-        c_stream, c_info = st.columns([1, 1])
-        with c_stream:
-            st.markdown("#### 🎥 Live Camera Stream")
-            st.write("Click **START** below to begin real-time facial expression classification:")
+    with tab_cam:
+        c_cam_input, c_cam_output = st.columns([1, 1])
+        with c_cam_input:
+            st.markdown("#### 📷 Capture from Webcam")
+            st.write("Use your browser camera to capture a live facial expression for real-time neural classification:")
+            camera_frame = st.camera_input("Take a Photo with Webcam", key="main_webcam_input")
 
-            try:
-                import av
-                from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
+        with c_cam_output:
+            st.markdown("#### 📊 Emotion Classification & Spectrum")
+            if camera_frame is not None:
+                pil_cam = Image.open(camera_frame).convert("RGB")
+                cam_np = np.array(pil_cam)
+                cam_bgr = cv2.cvtColor(cam_np, cv2.COLOR_RGB2BGR)
 
-                RTC_CONFIG = RTCConfiguration(
-                    {"iceServers": [
-                        {"urls": ["stun:stun.l.google.com:19302"]},
-                        {"urls": ["stun:stun1.l.google.com:19302"]},
-                        {"urls": ["stun:stun2.l.google.com:19302"]}
-                    ]}
-                )
+                with st.spinner("Classifying facial expressions..."):
+                    t_start = time.perf_counter()
+                    annotated_cam_bgr, cam_results = engine.process_frame(cam_bgr, draw_annotations=True)
+                    t_infer = (time.perf_counter() - t_start) * 1000.0
+                    annotated_cam_rgb = cv2.cvtColor(annotated_cam_bgr, cv2.COLOR_BGR2RGB)
 
-                class LiveStreamProcessor(VideoProcessorBase):
-                    def __init__(self):
-                        self.engine = engine
+                st.image(annotated_cam_rgb, caption=f"Analyzed Face Frame ({t_infer:.1f} ms)", use_container_width=True)
 
-                    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-                        try:
-                            img = frame.to_ndarray(format="bgr24")
-                            h, w = img.shape[:2]
-                            if w > 640:
-                                scale = 640.0 / w
-                                img = cv2.resize(img, (640, int(h * scale)), interpolation=cv2.INTER_LINEAR)
-                            img = cv2.flip(img, 1)
-                            rendered, _ = self.engine.process_frame(img, draw_annotations=True)
-                            return av.VideoFrame.from_ndarray(rendered, format="bgr24")
-                        except Exception:
-                            return frame
-
-                webrtc_streamer(
-                    key="decodex-emotion-live-stream",
-                    mode=WebRtcMode.SENDRECV,
-                    video_processor_factory=LiveStreamProcessor,
-                    rtc_configuration=RTC_CONFIG,
-                    media_stream_constraints={
-                        "video": {
-                            "width": {"ideal": 640},
-                            "height": {"ideal": 480}
-                        },
-                        "audio": False
-                    },
-                    async_processing=True
-                )
-            except Exception as e:
-                st.info("💡 Browser camera input:")
-                live_cam = st.camera_input("Capture face from webcam", key="live_cam_fallback")
-                if live_cam is not None:
-                    pil_cam = Image.open(live_cam).convert("RGB")
-                    cam_np = np.array(pil_cam)
-                    cam_bgr = cv2.cvtColor(cam_np, cv2.COLOR_RGB2BGR)
-                    annotated_bgr, cam_res = engine.process_frame(cam_bgr, draw_annotations=True)
-                    annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
-                    st.image(annotated_rgb, caption="Emotion Detection Result", use_container_width=True)
-                    if cam_res:
-                        top = cam_res[0]
-                        st.success(f"Detected: **{top['emotion']}** ({top['confidence']*100:.1f}%)")
-
-        with c_info:
-            st.markdown("#### 💡 Telemetry & Instructions")
-            st.markdown("""
-            <div class="glass-panel">
-                <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.5rem; font-family: 'Orbitron', sans-serif;">STREAM GUIDELINES</div>
-                <p style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 0.8rem;">
-                    • <strong>Lighting</strong>: Ensure even facial lighting without harsh backlights.<br>
-                    • <strong>Framing</strong>: Position your face centered within the frame.<br>
-                    • <strong>Multi-Face</strong>: Supports simultaneous multi-person emotion tagging.
-                </p>
-                <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.4rem; font-family: 'Orbitron', sans-serif;">DESKTOP WINDOW</div>
-                <p style="font-size: 0.85rem; color: #94a3b8;">For hardware-accelerated 60 FPS OpenCV display, run:</p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.code("python emotions.py --mode display", language="bash")
+                if not cam_results:
+                    st.warning("No face detected in camera frame. Ensure your face is centered and well-lit.")
+                else:
+                    for i, res in enumerate(cam_results):
+                        meta = EMOTION_META.get(res["emotion"], {})
+                        st.markdown(f"""
+                        <div class="emotion-highlight-card" style="border-left: 4px solid {meta.get('color', '#00f2fe')};">
+                            <span style="font-size: 2.4rem;">{meta.get('emoji', '🎭')}</span>
+                            <div class="emotion-title" style="color: {meta.get('color', '#fff')}; font-size: 1.9rem;">
+                                {res['emotion']}
+                            </div>
+                            <div style="font-weight: 700; color: #cbd5e1; font-size: 1.1rem;">Confidence: {res['confidence']*100:.1f}%</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.plotly_chart(plot_emotion_radar(res["probabilities"]), use_container_width=True)
+            else:
+                st.markdown("""
+                <div class="glass-panel">
+                    <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.5rem; font-family: 'Orbitron', sans-serif;">CAMERA INSTRUCTIONS</div>
+                    <p style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 0.8rem;">
+                        1. Click <strong>Take Photo</strong> on the left camera view.<br>
+                        2. The neural network will instantly detect all faces, draw bounding boxes, and compute 7-class emotion probabilities.<br>
+                        3. Try expressing different emotions (Happy 😄, Surprised 😲, Angry 😠, Neutral 😐).
+                    </p>
+                    <div style="font-weight: 700; color: #00f2fe; margin-bottom: 0.4rem; font-family: 'Orbitron', sans-serif;">DESKTOP 60 FPS WINDOW</div>
+                    <p style="font-size: 0.85rem; color: #94a3b8;">For hardware-accelerated continuous 60 FPS local OpenCV feed, run in terminal:</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.code("python emotions.py --mode display", language="bash")
 
     # -------------------------------------------------------------------------
     # TAB 2: One-Click Demo Presets (Symmetrical 4-Column Gallery)
@@ -621,35 +593,7 @@ def main():
                     )
 
     # -------------------------------------------------------------------------
-    # TAB 4: Snapshot Mode (Symmetrical 50 / 50 Split)
-    # -------------------------------------------------------------------------
-    with tab_snapshot:
-        st.markdown("#### 📸 Single Snapshot Photo Analysis")
-        camera_img = st.camera_input("Take a Snapshot")
-
-        if camera_img is not None:
-            pil_cam = Image.open(camera_img).convert("RGB")
-            cam_np = np.array(pil_cam)
-            cam_bgr = cv2.cvtColor(cam_np, cv2.COLOR_RGB2BGR)
-
-            annotated_cam_bgr, cam_results = engine.process_frame(cam_bgr, draw_annotations=True)
-            annotated_cam_rgb = cv2.cvtColor(annotated_cam_bgr, cv2.COLOR_BGR2RGB)
-
-            c_cam_img, c_cam_res = st.columns([1, 1])
-            with c_cam_img:
-                st.image(annotated_cam_rgb, caption="Snapshot Result", use_container_width=True)
-
-            with c_cam_res:
-                if not cam_results:
-                    st.warning("No face detected in snapshot. Ensure your face is centered and well-lit.")
-                else:
-                    for i, res in enumerate(cam_results):
-                        meta = EMOTION_META.get(res["emotion"], {})
-                        st.markdown(f"### Dominant: {meta.get('emoji', '')} **{res['emotion']}** (`{res['confidence']*100:.1f}%`)")
-                        st.plotly_chart(plot_emotion_bars(res["probabilities"]), use_container_width=True)
-
-    # -------------------------------------------------------------------------
-    # TAB 5: Architecture & Telemetry
+    # TAB 4: Architecture & Telemetry
     # -------------------------------------------------------------------------
     with tab_info:
         st.markdown("#### 🧠 Neural Architecture & Telemetry Benchmarks")
@@ -661,7 +605,7 @@ def main():
         | **Input Dimension** | $48 \\times 48 \\times 1$ | Grayscale, normalized float32 $[0.0, 1.0]$ with proportional margin |
         | **Parameters** | 2,345,607 weights | Optimized for sub-3ms low-latency inference |
         | **Mean Inference Time** | 2.66 ms / 376 FPS | High throughput real-time execution |
-        | **Face Detectors** | MediaPipe SSD & Haar Cascade | Dual backend with automatic fallback for high angle resilience |
+        | **Face Detector** | OpenCV Haar Cascade | Sub-millisecond face localization |
         | **Dataset & Accuracy** | FER-2013 | 63.2% Test Accuracy (CNN) / 65.8% (MobileNetV3) |
         """)
 
