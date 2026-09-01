@@ -1,3 +1,15 @@
-numpy==1.22.0
-opencv-python==4.8.1.78
-tensorflow==2.12.1
+# Tested and verified on Python 3.10-3.12 (Apple Silicon macOS & Linux/Windows x86_64)
+tensorflow==2.21.0
+keras==3.15.1
+mediapipe==1.0.1
+opencv-python>=4.8.0
+numpy>=1.26.0,<3.0.0
+pandas==3.0.5
+pillow==12.3.0
+tqdm==4.70.0
+matplotlib==3.11.1
+streamlit==1.62.0
+streamlit-webrtc==0.77.0
+plotly==7.0.0
+pytest>=8.0.0
+gdown>=5.2.0

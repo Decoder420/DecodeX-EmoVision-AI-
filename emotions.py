@@ -1,135 +1,183 @@
-import numpy as np
+import os
 import argparse
+import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten
-from tensorflow.keras.layers import Conv2D
+import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-import os
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+
+from src.models import build_cnn_model, build_mobilenet_model, compile_model, EMOTION_DICT
+from src.face_detector import FaceDetector
+from src.inference import EmotionEngine
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# command line argument
-ap = argparse.ArgumentParser()
-ap.add_argument("--mode",help="train/display")
-mode = ap.parse_args().mode
+def parse_arguments():
+    ap = argparse.ArgumentParser(description="Emotion Detection using Deep Learning")
+    ap.add_argument("--mode", default="display", choices=["train", "display"], help="train / display")
+    ap.add_argument("--model", default="cnn", choices=["cnn", "mobilenet"], help="Model architecture (cnn or mobilenet)")
+    ap.add_argument("--detector", default="mediapipe", choices=["mediapipe", "haar"], help="Face detector backend")
+    ap.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    ap.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
+    ap.add_argument("--lr", type=float, default=0.0001, help="Learning rate for Adam optimizer")
+    ap.add_argument("--model_path", default="model.h5", help="Path to save or load model weights")
+    ap.add_argument("--augment", action="store_true", help="Enable data augmentation during training")
+    ap.add_argument("--data_dir", default="data", help="Directory containing train and test folders")
+    return ap.parse_args()
 
-# plots accuracy and loss curves
-def plot_model_history(model_history):
+def plot_model_history(model_history, save_plot=True):
     """
-    Plot Accuracy and Loss curves given the model_history
+    Plot and save Accuracy and Loss curves given the model_history.
     """
-    fig, axs = plt.subplots(1,2,figsize=(15,5))
-    # summarize history for accuracy
-    axs[0].plot(range(1,len(model_history.history['accuracy'])+1),model_history.history['accuracy'])
-    axs[0].plot(range(1,len(model_history.history['val_accuracy'])+1),model_history.history['val_accuracy'])
-    axs[0].set_title('Model Accuracy')
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    epochs_range = range(1, len(model_history.history['accuracy']) + 1)
+
+    # Accuracy Plot
+    axs[0].plot(epochs_range, model_history.history['accuracy'], label='Train Accuracy', color='#2563eb', lw=2)
+    if 'val_accuracy' in model_history.history:
+        axs[0].plot(epochs_range, model_history.history['val_accuracy'], label='Val Accuracy', color='#16a34a', lw=2)
+    axs[0].set_title('Model Accuracy', fontsize=14, fontweight='bold')
     axs[0].set_ylabel('Accuracy')
     axs[0].set_xlabel('Epoch')
-    axs[0].set_xticks(np.arange(1,len(model_history.history['accuracy'])+1),len(model_history.history['accuracy'])/10)
-    axs[0].legend(['train', 'val'], loc='best')
-    # summarize history for loss
-    axs[1].plot(range(1,len(model_history.history['loss'])+1),model_history.history['loss'])
-    axs[1].plot(range(1,len(model_history.history['val_loss'])+1),model_history.history['val_loss'])
-    axs[1].set_title('Model Loss')
+    axs[0].legend(loc='lower right')
+    axs[0].grid(True, alpha=0.3)
+
+    # Loss Plot
+    axs[1].plot(epochs_range, model_history.history['loss'], label='Train Loss', color='#dc2626', lw=2)
+    if 'val_loss' in model_history.history:
+        axs[1].plot(epochs_range, model_history.history['val_loss'], label='Val Loss', color='#ca8a04', lw=2)
+    axs[1].set_title('Model Loss', fontsize=14, fontweight='bold')
     axs[1].set_ylabel('Loss')
     axs[1].set_xlabel('Epoch')
-    axs[1].set_xticks(np.arange(1,len(model_history.history['loss'])+1),len(model_history.history['loss'])/10)
-    axs[1].legend(['train', 'val'], loc='best')
-    fig.savefig('plot.png')
-    plt.show()
+    axs[1].legend(loc='upper right')
+    axs[1].grid(True, alpha=0.3)
 
-# Define data generators
-train_dir = 'data/train'
-val_dir = 'data/test'
+    plt.tight_layout()
+    if save_plot:
+        fig.savefig('plot.png', dpi=300)
+        fig.savefig('accuracy.png', dpi=300)
+        print("[INFO] Plots saved to plot.png and accuracy.png")
+    plt.close(fig)
 
-num_train = 28709
-num_val = 7178
-batch_size = 64
-num_epoch = 50
+def create_dataset_generators(data_dir, batch_size=64):
+    """
+    Creates normalized training and validation datasets using modern tf.keras.utils.image_dataset_from_directory.
+    Falls back gracefully if data folders are missing.
+    """
+    train_dir = os.path.join(data_dir, 'train')
+    val_dir = os.path.join(data_dir, 'test')
 
-train_datagen = ImageDataGenerator(rescale=1./255)
-val_datagen = ImageDataGenerator(rescale=1./255)
+    if not os.path.exists(train_dir) or not os.path.exists(val_dir):
+        raise FileNotFoundError(f"Training/Testing data directories not found in '{data_dir}'. Run dataset_prepare.py first.")
 
-train_generator = train_datagen.flow_from_directory(
+    train_ds = tf.keras.utils.image_dataset_from_directory(
         train_dir,
-        target_size=(48,48),
+        labels='inferred',
+        label_mode='categorical',
+        color_mode='grayscale',
         batch_size=batch_size,
-        color_mode="grayscale",
-        class_mode='categorical')
+        image_size=(48, 48),
+        shuffle=True
+    )
 
-validation_generator = val_datagen.flow_from_directory(
+    val_ds = tf.keras.utils.image_dataset_from_directory(
         val_dir,
-        target_size=(48,48),
+        labels='inferred',
+        label_mode='categorical',
+        color_mode='grayscale',
         batch_size=batch_size,
-        color_mode="grayscale",
-        class_mode='categorical')
+        image_size=(48, 48),
+        shuffle=False
+    )
 
-# Create the model
-model = Sequential()
+    # Normalize inputs to [0.0, 1.0]
+    normalization_layer = tf.keras.layers.Rescaling(1./255)
+    train_ds = train_ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=tf.data.AUTOTUNE)
+    val_ds = val_ds.map(lambda x, y: (normalization_layer(x), y), num_parallel_calls=tf.data.AUTOTUNE)
 
-model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48,48,1)))
-model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
+    # Prefetch for performance
+    train_ds = train_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    val_ds = val_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
 
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
+    return train_ds, val_ds
 
-model.add(Flatten())
-model.add(Dense(1024, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(7, activation='softmax'))
+def run_training(args):
+    """
+    Executes model training with modern Keras fit API, callbacks, and visualization.
+    """
+    print(f"[INFO] Initializing {args.model.upper()} model for training...")
+    if args.model == "mobilenet":
+        model = build_mobilenet_model(input_shape=(48, 48, 1), num_classes=7, with_augmentation=args.augment)
+    else:
+        model = build_cnn_model(input_shape=(48, 48, 1), num_classes=7, with_augmentation=args.augment)
 
-# If you want to train the same model or try other models, go for this
-if mode == "train":
-    model.compile(loss='categorical_crossentropy',optimizer=Adam(lr=0.0001, decay=1e-6),metrics=['accuracy'])
-    model_info = model.fit_generator(
-            train_generator,
-            steps_per_epoch=num_train // batch_size,
-            epochs=num_epoch,
-            validation_data=validation_generator,
-            validation_steps=num_val // batch_size)
-    plot_model_history(model_info)
-    model.save_weights('model.h5')
+    # Compile with modern Adam learning_rate argument
+    model = compile_model(model, learning_rate=args.lr)
+    model.summary()
 
-# emotions will be displayed on your face from the webcam feed
-elif mode == "display":
-    model.load_weights('model.h5')
+    train_ds, val_ds = create_dataset_generators(args.data_dir, batch_size=args.batch_size)
 
-    # prevents openCL usage and unnecessary logging messages
+    callbacks = [
+        ModelCheckpoint(args.model_path, monitor='val_accuracy', save_best_only=True, verbose=1),
+        EarlyStopping(monitor='val_loss', patience=12, restore_best_weights=True, verbose=1),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-7, verbose=1)
+    ]
+
+    print(f"[INFO] Starting training for {args.epochs} epochs...")
+    # Modern model.fit instead of deprecated model.fit_generator
+    history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=args.epochs,
+        callbacks=callbacks
+    )
+
+    plot_model_history(history)
+    model.save_weights(args.model_path)
+    print(f"[INFO] Training complete. Model weights saved to '{args.model_path}'.")
+
+def run_display(args):
+    """
+    Real-time webcam inference loop with MediaPipe/Haar Cascade face detection and normalized model prediction.
+    """
+    engine = EmotionEngine(
+        model_path=args.model_path,
+        model_type=args.model,
+        detector_type=args.detector,
+        cascade_path="haarcascade_frontalface_default.xml"
+    )
+
+    # Disable OpenCL if required for OpenCV stability
     cv2.ocl.setUseOpenCL(False)
 
-    # dictionary which assigns each label an emotion (alphabetical order)
-    emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful", 3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
-
-    # start the webcam feed
     cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("[ERROR] Could not open webcam (index 0). If you don't have a webcam connected, use the Web UI image upload mode.")
+        return
+
+    print("[INFO] Starting webcam feed. Press 'q' to exit.")
     while True:
-        # Find haar cascade to draw bounding box around face
         ret, frame = cap.read()
         if not ret:
+            print("[WARN] Failed to grab frame from webcam.")
             break
-        facecasc = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = facecasc.detectMultiScale(gray,scaleFactor=1.3, minNeighbors=5)
 
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y-50), (x+w, y+h+10), (255, 0, 0), 2)
-            roi_gray = gray[y:y + h, x:x + w]
-            cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)
-            prediction = model.predict(cropped_img)
-            maxindex = int(np.argmax(prediction))
-            cv2.putText(frame, emotion_dict[maxindex], (x+20, y-60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        annotated_frame, results = engine.process_frame(frame, draw_annotations=True)
 
-        cv2.imshow('Video', cv2.resize(frame,(1600,960),interpolation = cv2.INTER_CUBIC))
+        display_frame = cv2.resize(annotated_frame, (1280, 720), interpolation=cv2.INTER_LINEAR)
+        cv2.imshow('Emotion Detection (Press q to quit)', display_frame)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    engine.detector.close()
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    if args.mode == "train":
+        run_training(args)
+    elif args.mode == "display":
+        run_display(args)

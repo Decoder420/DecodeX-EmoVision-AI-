@@ -3,102 +3,74 @@ import pandas as pd
 from PIL import Image
 from tqdm import tqdm
 import os
+import argparse
 
-# convert string to integer
-def atoi(s):
-    n = 0
-    for i in s:
-        n = n*10 + ord(i) - ord("0")
-    return n
+# Canonical FER-2013 emotion mapping (verified against official ICML 2013 dataset specifications)
+FER2013_EMOTION_MAP = {
+    0: 'angry',
+    1: 'disgusted',
+    2: 'fearful',
+    3: 'happy',
+    4: 'sad',
+    5: 'surprised',
+    6: 'neutral'
+}
 
-# making folders
-outer_names = ['test','train']
-inner_names = ['angry', 'disgusted', 'fearful', 'happy', 'sad', 'surprised', 'neutral']
-os.makedirs('data', exist_ok=True)
-for outer_name in outer_names:
-    os.makedirs(os.path.join('data',outer_name), exist_ok=True)
-    for inner_name in inner_names:
-        os.makedirs(os.path.join('data',outer_name,inner_name), exist_ok=True)
+def prepare_dataset(csv_path='./fer2013.csv', output_dir='data'):
+    """
+    Parses FER2013 dataset CSV and saves images into structured folders.
+    - Uses modern numpy array conversion from split string (avoiding np.fromstring deprecation).
+    - Writes correctly to output_dir/train and output_dir/test.
+    """
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"Dataset CSV file not found at: {csv_path}")
 
-# to keep count of each category
-angry = 0
-disgusted = 0
-fearful = 0
-happy = 0
-sad = 0
-surprised = 0
-neutral = 0
-angry_test = 0
-disgusted_test = 0
-fearful_test = 0
-happy_test = 0
-sad_test = 0
-surprised_test = 0
-neutral_test = 0
+    # Create destination directories under output_dir/train and output_dir/test
+    outer_names = ['train', 'test']
+    for outer in outer_names:
+        for inner in FER2013_EMOTION_MAP.values():
+            os.makedirs(os.path.join(output_dir, outer, inner), exist_ok=True)
 
-df = pd.read_csv('./fer2013.csv')
-mat = np.zeros((48,48),dtype=np.uint8)
-print("Saving images...")
+    # Initialize counters for each emotion category
+    counts = {
+        'train': {emotion: 0 for emotion in FER2013_EMOTION_MAP.values()},
+        'test': {emotion: 0 for emotion in FER2013_EMOTION_MAP.values()}
+    }
 
-# read the csv file line by line
-for i in tqdm(range(len(df))):
-    txt = df['pixels'][i]
-    words = txt.split()
-    
-    # the image size is 48x48
-    for j in range(2304):
-        xind = j // 48
-        yind = j % 48
-        mat[xind][yind] = atoi(words[j])
+    print(f"Reading {csv_path}...")
+    df = pd.read_csv(csv_path)
+    total_samples = len(df)
+    train_cutoff = 28709  # First 28709 rows are training, remaining are test
 
-    img = Image.fromarray(mat)
+    print(f"Saving {total_samples} images to '{output_dir}' directory...")
 
-    # train
-    if i < 28709:
-        if df['emotion'][i] == 0:
-            img.save('train/angry/im'+str(angry)+'.png')
-            angry += 1
-        elif df['emotion'][i] == 1:
-            img.save('train/disgusted/im'+str(disgusted)+'.png')
-            disgusted += 1
-        elif df['emotion'][i] == 2:
-            img.save('train/fearful/im'+str(fearful)+'.png')
-            fearful += 1
-        elif df['emotion'][i] == 3:
-            img.save('train/happy/im'+str(happy)+'.png')
-            happy += 1
-        elif df['emotion'][i] == 4:
-            img.save('train/sad/im'+str(sad)+'.png')
-            sad += 1
-        elif df['emotion'][i] == 5:
-            img.save('train/surprised/im'+str(surprised)+'.png')
-            surprised += 1
-        elif df['emotion'][i] == 6:
-            img.save('train/neutral/im'+str(neutral)+'.png')
-            neutral += 1
+    # Fast iteration using modern split + numpy array conversion
+    for i in tqdm(range(total_samples)):
+        split = 'train' if i < train_cutoff else 'test'
+        emotion_id = int(df['emotion'].iloc[i])
+        
+        # Verify emotion ID is in valid FER2013 range 0..6
+        assert 0 <= emotion_id <= 6, f"Invalid emotion ID {emotion_id} at row {i}"
+        emotion_name = FER2013_EMOTION_MAP[emotion_id]
 
-    # test
-    else:
-        if df['emotion'][i] == 0:
-            img.save('test/angry/im'+str(angry_test)+'.png')
-            angry_test += 1
-        elif df['emotion'][i] == 1:
-            img.save('test/disgusted/im'+str(disgusted_test)+'.png')
-            disgusted_test += 1
-        elif df['emotion'][i] == 2:
-            img.save('test/fearful/im'+str(fearful_test)+'.png')
-            fearful_test += 1
-        elif df['emotion'][i] == 3:
-            img.save('test/happy/im'+str(happy_test)+'.png')
-            happy_test += 1
-        elif df['emotion'][i] == 4:
-            img.save('test/sad/im'+str(sad_test)+'.png')
-            sad_test += 1
-        elif df['emotion'][i] == 5:
-            img.save('test/surprised/im'+str(surprised_test)+'.png')
-            surprised_test += 1
-        elif df['emotion'][i] == 6:
-            img.save('test/neutral/im'+str(neutral_test)+'.png')
-            neutral_test += 1
+        # Fast parsing via split + uint8 array reshaping (modern, deprecation-free)
+        pixels_str = df['pixels'].iloc[i]
+        pixels_arr = np.array(pixels_str.split(), dtype=np.uint8).reshape((48, 48))
 
-print("Done!")
+        img = Image.fromarray(pixels_arr)
+        count = counts[split][emotion_name]
+        save_path = os.path.join(output_dir, split, emotion_name, f'im{count}.png')
+        img.save(save_path)
+        counts[split][emotion_name] += 1
+
+    print("\nDataset preparation completed successfully!")
+    print(f"Training samples: {sum(counts['train'].values())}")
+    print(f"Testing samples:  {sum(counts['test'].values())}")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Extract FER-2013 CSV to PNG image dataset")
+    parser.add_argument('--csv', default='./fer2013.csv', help='Path to fer2013.csv file')
+    parser.add_argument('--output', default='data', help='Output directory for train and test folders')
+    args = parser.parse_args()
+
+    prepare_dataset(csv_path=args.csv, output_dir=args.output)
