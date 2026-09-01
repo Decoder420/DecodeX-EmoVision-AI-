@@ -483,8 +483,19 @@ def main():
                     },
                     async_processing=True
                 )
-            except Exception as e:
-                st.error(f"Live Stream Error: {e}")
+            except Exception:
+                st.info("💡 Real-time browser camera input (Cloud mode):")
+                live_cam = st.camera_input("Capture face from webcam", key="live_cam_fallback")
+                if live_cam is not None:
+                    pil_cam = Image.open(live_cam).convert("RGB")
+                    cam_np = np.array(pil_cam)
+                    cam_bgr = cv2.cvtColor(cam_np, cv2.COLOR_RGB2BGR)
+                    annotated_bgr, cam_res = engine.process_frame(cam_bgr, draw_annotations=True)
+                    annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
+                    st.image(annotated_rgb, caption="Emotion Detection Result", use_container_width=True)
+                    if cam_res:
+                        top = cam_res[0]
+                        st.success(f"Detected: **{top['emotion']}** ({top['confidence']*100:.1f}%)")
 
         with c_info:
             st.markdown("#### 💡 Telemetry & Instructions")
