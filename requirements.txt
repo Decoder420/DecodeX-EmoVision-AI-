@@ -1,4 +1,4 @@
-# Tested and verified on Python 3.10-3.12 (Apple Silicon macOS & Linux/Windows x86_64)
+# Verified and tested on Python 3.10-3.12 (Apple Silicon macOS arm64 & Linux/Windows x86_64)
 tensorflow==2.21.0
 keras==3.15.1
 mediapipe==1.0.1

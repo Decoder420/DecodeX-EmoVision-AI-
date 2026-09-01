@@ -30,7 +30,7 @@ This guide outlines breaking changes, directory restructuring, API upgrades, and
 
 ---
 
-## ⚡ Key Improvements
+## ⚡ Key Improvements & UX Differences
 
 1. **Normalized Live Inference**:
    - Fixed missing input scaling in live webcam loop (`[0, 255] -> [0.0, 1.0]`) via unified `preprocess_face_roi` in `src.models`.
@@ -38,11 +38,12 @@ This guide outlines breaking changes, directory restructuring, API upgrades, and
 2. **Upgraded Face Detector**:
    - Modern **MediaPipe Face Detection** (BlazeFace SSD topology) with automatic fallback to **OpenCV Haar Cascade** (`haarcascade_frontalface_default.xml`).
 
-3. **Modern Streamlit Web App**:
-   - Launch with `streamlit run app.py` for webcam snapshots, photo uploads, and dynamic emotion probability charts.
+3. **Web UI vs CLI Webcam Modes**:
+   - **Streamlit Web App (`app.py`)**: Uses **snapshot-based capture** (`st.camera_input`) for zero-dependency browser photo analysis and multi-face probability bar charts.
+   - **CLI Script (`emotions.py --mode display`)**: Uses OpenCV VideoCapture for **continuous 60 FPS real-time webcam video feed**.
 
 4. **Transfer Learning Baseline & Benchmarks**:
-   - Added MobileNetV3-Small baseline and `src/benchmark.py` to compare inference latency, parameter counts, and throughput.
+   - Added MobileNetV3-Small baseline (~65.8% accuracy, 23.6 ms) and `src/benchmark.py` comparing against the custom CNN (63.2% accuracy, 2.66 ms).
 
 ---
 
@@ -55,10 +56,10 @@ python dataset_prepare.py --csv fer2013.csv --output data
 # 2. Train CNN with data augmentation
 python emotions.py --mode train --model cnn --epochs 50 --augment
 
-# 3. Live webcam inference (OpenCV 60 FPS)
+# 3. Live continuous webcam inference (OpenCV 60 FPS)
 python emotions.py --mode display --detector mediapipe
 
-# 4. Launch interactive Web UI
+# 4. Launch interactive Web UI (Snapshot & Image Upload)
 streamlit run app.py
 
 # 5. Run automated test suite

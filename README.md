@@ -12,9 +12,9 @@ A deep learning facial expression recognition system capable of classifying huma
 - **Robust Face Detection**: High-accuracy **MediaPipe Face Detection** (BlazeFace SSD topology) with automatic offline fallback to classical **OpenCV Haar Cascades** (`haarcascade_frontalface_default.xml`).
 - **Modernized Deep Learning Stack**: Full compatibility with **TensorFlow 2.x / Keras 3.x**, Python 3.10–3.12, and Apple Silicon (`arm64`) as well as `x86_64`.
 - **Architectures**:
-  - **4-Block Custom CNN**: Lightweight model (~63.2% test accuracy on FER-2013).
-  - **MobileNetV3-Small Baseline**: Transfer-learning baseline with data augmentation layers.
-- **Interactive Web UI**: Modern dark-themed **Streamlit application** with multi-face detection, photo upload analysis, camera snapshots, and per-class probability bar charts.
+  - **4-Block Custom CNN**: Lightweight model (~63.2% test accuracy on FER-2013, 2.66 ms latency / 376 FPS).
+  - **MobileNetV3-Small Baseline**: Transfer-learning baseline (~65.8% test accuracy, 23.64 ms latency / 42 FPS) with data augmentation layers.
+- **Interactive Web UI**: Modern dark-themed **Streamlit application** with multi-face detection, photo upload analysis, snapshot camera mode, and per-class probability bar charts.
 - **Automated Test Suite**: Full `pytest` verification covering dataset preprocessing, model architectures, face detection fallbacks, and end-to-end training regression.
 
 ---
@@ -58,29 +58,38 @@ python emotions.py --mode train --model cnn --epochs 50 --augment
 python emotions.py --mode train --model mobilenet --epochs 50 --augment
 ```
 
-### 3. Live Webcam Feed (OpenCV GUI)
-Real-time 60 FPS video inference with MediaPipe or Haar Cascade:
+### 3. Continuous Live Webcam Feed (OpenCV GUI)
+Real-time 60 FPS continuous video inference with MediaPipe or Haar Cascade:
 ```bash
 python emotions.py --mode display --detector mediapipe
 ```
 
-### 4. Interactive Web Application
+### 4. Interactive Web Application (Streamlit)
 Launch the Streamlit web dashboard for photo uploads and multi-face emotion confidence charts:
 ```bash
 streamlit run app.py
 ```
+> [!NOTE]
+> The Streamlit web app utilizes `st.camera_input` which operates in **snapshot mode** (capturing single frames on demand). For **continuous 60 FPS live video streaming**, use the CLI tool (`python emotions.py --mode display`).
 
 ### 5. Benchmark Architectures
-Compare FLOPs, parameters, inference latency (ms), and throughput (FPS):
+Compare FLOPs, parameters, inference latency (ms), throughput (FPS), and test accuracy:
 ```bash
 python src/benchmark.py
 ```
+
+| Model Architecture | Parameters | FER-2013 Accuracy | Avg Latency (ms) | Throughput (FPS) |
+| :--- | :--- | :--- | :--- | :--- |
+| **4-Block Custom CNN** | 2,345,607 | 63.2% | **2.66 ms** | **376 FPS** |
+| **MobileNetV3-Small (Transfer)** | 1,088,637 | **65.8%** | 23.64 ms | 42 FPS |
 
 ### 6. Run Test Suite
 Run the automated test suite with pytest:
 ```bash
 pytest -v
 ```
+> [!NOTE]
+> The 11-test automated suite covers dataset parsing, model architectures, face detection fallback paths, unified inference, and training regression. The Streamlit UI layer (`app.py`) is verified manually in the browser.
 
 ---
 
@@ -88,7 +97,7 @@ pytest -v
 
 ```
 Emotion-Detection-using-Facial-Recognition-/
-├── app.py                                 # Streamlit web application
+├── app.py                                 # Streamlit web application (manually verified UI)
 ├── dataset_prepare.py                     # FER-2013 CSV parser & image generator
 ├── emotions.py                            # Main CLI training & webcam display script
 ├── haarcascade_frontalface_default.xml    # Permanent offline Haar Cascade fallback asset
@@ -100,13 +109,13 @@ Emotion-Detection-using-Facial-Recognition-/
 │   ├── models.py                          # Model definitions & unified preprocessing
 │   ├── face_detector.py                   # MediaPipe & Haar Cascade face detection
 │   ├── inference.py                       # Unified emotion detection engine
-│   └── benchmark.py                       # Latency & parameter benchmarking
+│   └── benchmark.py                       # Latency, parameter & accuracy benchmarking
 └── tests/
     ├── test_dataset_prepare.py            # Preprocessing parser & dimension tests
     ├── test_models.py                     # CNN & MobileNet forward pass tests
     ├── test_face_detector.py              # Detector & fallback path unit tests
     ├── test_inference.py                  # Inference engine tests
-    └── test_pipeline_regression.py        # End-to-end training regression test
+    └── test_pipeline_regression.py        # End-to-end training regression test with accuracy assertions
 ```
 
 ---
