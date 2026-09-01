@@ -407,7 +407,8 @@ def main():
                             _, self.cached_faces = self.engine.process_frame(img, draw_annotations=False)
 
                         # Hand tracking on every frame
-                        hands_data = self.hand_tracker.process_frame(img)
+                        face_bboxes = [f["bbox"] for f in self.cached_faces]
+                        hands_data = self.hand_tracker.process_frame(img, face_bboxes=face_bboxes)
                         gesture_state = self.gesture_engine.analyze(hands_data)
 
                         # Render Sci-Fi HUD

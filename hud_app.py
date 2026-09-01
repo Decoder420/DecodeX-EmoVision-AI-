@@ -110,7 +110,8 @@ def run_desktop_hud(args):
             _, cached_face_results = engine.process_frame(frame, draw_annotations=False)
 
         # Hand tracking on EVERY frame for immediate touchless responsiveness
-        hands_data = hand_tracker.process_frame(frame)
+        face_bboxes = [f["bbox"] for f in cached_face_results]
+        hands_data = hand_tracker.process_frame(frame, face_bboxes=face_bboxes)
 
         # Gesture Analysis
         gesture_state = gesture_engine.analyze(hands_data)
