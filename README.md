@@ -1,72 +1,118 @@
-# Emotion detection using deep learning
+# Facial Emotion Detection using Deep Learning (v2.0)
 
-## Introduction
+A deep learning facial expression recognition system capable of classifying human facial expressions into **seven emotions** (`Angry`, `Disgusted`, `Fearful`, `Happy`, `Neutral`, `Sad`, `Surprised`) in real time from live webcam feeds, uploaded photos, or the **FER-2013** dataset.
 
-This project aims to classify the emotion on a person's face into one of **seven categories**, using deep convolutional neural networks. The model is trained on the **FER-2013** dataset which was published on International Conference on Machine Learning (ICML). This dataset consists of 35887 grayscale, 48x48 sized face images with **seven emotions** - angry, disgusted, fearful, happy, neutral, sad and surprised.
+![Accuracy Plot](accuracy.png)
 
-## Dependencies
+---
 
-* Python 3, [OpenCV](https://opencv.org/), [Tensorflow](https://www.tensorflow.org/)
-* To install the required packages, run `pip install -r requirements.txt`.
+## 🌟 Key Features
 
-## Basic Usage
+- **Normalized Real-Time Inference**: Fixed input normalization discrepancy between training and live inference pipelines.
+- **Robust Face Detection**: High-accuracy **MediaPipe Face Detection** (BlazeFace SSD topology) with automatic offline fallback to classical **OpenCV Haar Cascades** (`haarcascade_frontalface_default.xml`).
+- **Modernized Deep Learning Stack**: Full compatibility with **TensorFlow 2.x / Keras 3.x**, Python 3.10–3.12, and Apple Silicon (`arm64`) as well as `x86_64`.
+- **Architectures**:
+  - **4-Block Custom CNN**: Lightweight model (~63.2% test accuracy on FER-2013).
+  - **MobileNetV3-Small Baseline**: Transfer-learning baseline with data augmentation layers.
+- **Interactive Web UI**: Modern dark-themed **Streamlit application** with multi-face detection, photo upload analysis, camera snapshots, and per-class probability bar charts.
+- **Automated Test Suite**: Full `pytest` verification covering dataset preprocessing, model architectures, face detection fallbacks, and end-to-end training regression.
 
-The repository is currently compatible with `tensorflow-2.0` and makes use of the Keras API using the `tensorflow.keras` library.
+---
 
-* First, clone the repository and enter the folder
+## 📦 Installation
 
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Decoder420/Emotion-Detection-using-Facial-Recognition-.git
+   cd Emotion-Detection-using-Facial-Recognition-
+   ```
+
+2. **Create a virtual environment (Python 3.10–3.12 recommended):**
+   ```bash
+   python3.12 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. **Install pinned dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## 🚀 Usage
+
+### 1. Data Preparation (FER-2013)
+Download `fer2013.csv` from [Kaggle](https://www.kaggle.com/deadskull7/fer2013) into the project root, then run:
 ```bash
-git clone https://github.com/atulapra/Emotion-detection.git
-cd Emotion-detection
+python dataset_prepare.py --csv ./fer2013.csv --output data
 ```
 
-* Download the FER-2013 dataset inside the `src` folder.
-
-* If you want to train this model, use:  
-
+### 2. Model Training
+Train the CNN or MobileNetV3 model with data augmentation and modern Keras callbacks:
 ```bash
-cd src
-python emotions.py --mode train
+# Train standard 4-block CNN
+python emotions.py --mode train --model cnn --epochs 50 --augment
+
+# Train MobileNetV3-Small
+python emotions.py --mode train --model mobilenet --epochs 50 --augment
 ```
 
-* If you want to view the predictions without training again, you can download the pre-trained model from [here](https://drive.google.com/file/d/1FUn0XNOzf-nQV7QjbBPA6-8GLoHNNgv-/view?usp=sharing) and then run:  
-
+### 3. Live Webcam Feed (OpenCV GUI)
+Real-time 60 FPS video inference with MediaPipe or Haar Cascade:
 ```bash
-cd src
-python emotions.py --mode display
+python emotions.py --mode display --detector mediapipe
 ```
 
-* The folder structure is of the form:  
-  src:
-  * data (folder)
-  * `emotions.py` (file)
-  * `haarcascade_frontalface_default.xml` (file)
-  * `model.h5` (file)
+### 4. Interactive Web Application
+Launch the Streamlit web dashboard for photo uploads and multi-face emotion confidence charts:
+```bash
+streamlit run app.py
+```
 
-* This implementation by default detects emotions on all faces in the webcam feed. With a simple 4-layer CNN, the test accuracy reached 63.2% in 50 epochs.
+### 5. Benchmark Architectures
+Compare FLOPs, parameters, inference latency (ms), and throughput (FPS):
+```bash
+python src/benchmark.py
+```
 
-![Accuracy plot](imgs/accuracy.png)
+### 6. Run Test Suite
+Run the automated test suite with pytest:
+```bash
+pytest -v
+```
 
-## Data Preparation (optional)
+---
 
-* The [original FER2013 dataset in Kaggle](https://www.kaggle.com/deadskull7/fer2013) is available as a single csv file. I had converted into a dataset of images in the PNG format for training/testing.
+## 📁 Repository Structure
 
-* In case you are looking to experiment with new datasets, you may have to deal with data in the csv format. I have provided the code I wrote for data preprocessing in the `dataset_prepare.py` file which can be used for reference.
+```
+Emotion-Detection-using-Facial-Recognition-/
+├── app.py                                 # Streamlit web application
+├── dataset_prepare.py                     # FER-2013 CSV parser & image generator
+├── emotions.py                            # Main CLI training & webcam display script
+├── haarcascade_frontalface_default.xml    # Permanent offline Haar Cascade fallback asset
+├── requirements.txt                       # Pinned dependencies for Python 3.10-3.12
+├── CHANGELOG.md                           # Detailed record of fixes & modernization
+├── MIGRATION.md                           # Guide for upgrading from v1.0
+├── src/
+│   ├── __init__.py
+│   ├── models.py                          # Model definitions & unified preprocessing
+│   ├── face_detector.py                   # MediaPipe & Haar Cascade face detection
+│   ├── inference.py                       # Unified emotion detection engine
+│   └── benchmark.py                       # Latency & parameter benchmarking
+└── tests/
+    ├── test_dataset_prepare.py            # Preprocessing parser & dimension tests
+    ├── test_models.py                     # CNN & MobileNet forward pass tests
+    ├── test_face_detector.py              # Detector & fallback path unit tests
+    ├── test_inference.py                  # Inference engine tests
+    └── test_pipeline_regression.py        # End-to-end training regression test
+```
 
-## Algorithm
+---
 
-* First, the **haar cascade** method is used to detect faces in each frame of the webcam feed.
+## 📚 References
 
-* The region of image containing the face is resized to **48x48** and is passed as input to the CNN.
-
-* The network outputs a list of **softmax scores** for the seven classes of emotions.
-
-* The emotion with maximum score is displayed on the screen.
-
-## References
-
-* "Challenges in Representation Learning: A report on three machine learning contests." I Goodfellow, D Erhan, PL Carrier, A Courville, M Mirza, B
-   Hamner, W Cukierski, Y Tang, DH Lee, Y Zhou, C Ramaiah, F Feng, R Li,  
-   X Wang, D Athanasakis, J Shawe-Taylor, M Milakov, J Park, R Ionescu,
-   M Popescu, C Grozea, J Bergstra, J Xie, L Romaszko, B Xu, Z Chuang, and
-   Y. Bengio. arXiv 2013.
+- Goodfellow, I. et al. *"Challenges in Representation Learning: A report on three machine learning contests."* ICML 2013 / arXiv:1307.0414.
+- Howard, A. et al. *"Searching for MobileNetV3."* ICCV 2019 / arXiv:1905.02244.
+- Lugaresi, C. et al. *"MediaPipe: A Framework for Building Perception Pipelines."* arXiv:1906.08172.
