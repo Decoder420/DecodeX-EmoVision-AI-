@@ -8,44 +8,43 @@ import sys
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from src.inference import EmotionEngine
-from src.hand_tracker import HandTracker
-from src.gesture_engine import GestureEngine
-from src.hud_renderer import HUDRenderer
 
-app = FastAPI(title="EmoVision Holo-HUD Web App")
+app = FastAPI(title="EmoVision Hologram & Gesture Workspace")
 
-# Initialize AI Engines
+# Initialize AI Engine
 engine = EmotionEngine(model_path="model.h5", model_type="cnn", detector_type="haar")
-hand_tracker = HandTracker(max_num_hands=2, smooth_alpha=0.65)
-gesture_engine = GestureEngine()
-hud_renderer = HUDRenderer()
 
-class FramePayload(BaseModel):
-    image: str # Base64 encoded JPEG/PNG frame
-    mode: str = "holo" # "holo" or "standard"
+class FaceFramePayload(BaseModel):
+    image: str # Base64 JPEG
 
 HTML_CONTENT = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EmoVision AI PRO // Iron Man Holographic HUD</title>
+    <title>Iron Man Hologram & Gesture Workspace // EmoVision PRO</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands & Camera Utils -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <style>
         :root {
-            --bg: #070913;
-            --panel-bg: rgba(15, 23, 42, 0.75);
+            --bg: #050711;
             --cyan: #00f2fe;
             --magenta: #ff0844;
             --neon-blue: #4facfe;
+            --yellow: #f59e0b;
             --green: #10b981;
             --purple: #8a2be2;
         }
@@ -54,34 +53,34 @@ HTML_CONTENT = """<!DOCTYPE html>
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            user-select: none;
         }
 
         body {
             background-color: var(--bg);
             background-image: 
-                radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 85% 85%, rgba(255, 8, 68, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 50% 10%, rgba(0, 242, 254, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 8, 68, 0.08) 0%, transparent 50%),
                 linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-            background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+            background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
             color: #f8fafc;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
 
         /* Top Header */
         header {
-            padding: 1.2rem 2.5rem;
+            padding: 0.8rem 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(0, 242, 254, 0.2);
-            background: rgba(7, 9, 19, 0.85);
-            backdrop-filter: blur(12px);
-            position: sticky;
-            top: 0;
+            border-bottom: 1px solid rgba(0, 242, 254, 0.25);
+            background: rgba(5, 7, 17, 0.9);
+            backdrop-filter: blur(15px);
             z-index: 100;
         }
 
@@ -93,25 +92,25 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         .brand h1 {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             font-weight: 900;
             background: linear-gradient(135deg, var(--cyan), #fff, var(--magenta));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
         }
 
         .status-badge {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            background: rgba(16, 185, 129, 0.15);
-            color: #34d399;
-            padding: 0.35rem 0.85rem;
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--cyan);
+            padding: 0.3rem 0.8rem;
             border-radius: 9999px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            border: 1px solid rgba(0, 242, 254, 0.3);
             text-transform: uppercase;
             font-family: 'JetBrains Mono', monospace;
         }
@@ -119,540 +118,853 @@ HTML_CONTENT = """<!DOCTYPE html>
         .status-dot {
             width: 8px;
             height: 8px;
-            background: #10b981;
+            background: var(--cyan);
             border-radius: 50%;
-            box-shadow: 0 0 10px #10b981;
+            box-shadow: 0 0 10px var(--cyan);
             animation: pulse 1.5s infinite;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.3); }
+            50% { opacity: 0.4; transform: scale(1.4); }
         }
 
-        /* Main Container */
-        .container {
-            max-width: 1440px;
-            margin: 0 auto;
-            padding: 1.8rem 2rem;
-            display: grid;
-            grid-template-columns: 1fr 380px;
-            gap: 1.8rem;
+        /* Main Workspace Container */
+        .workspace-area {
+            position: relative;
             flex: 1;
             width: 100%;
-        }
-
-        /* Viewport Canvas Card */
-        .viewport-card {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            border: 1px solid rgba(0, 242, 254, 0.3);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(0, 242, 254, 0.05);
-            padding: 1.2rem;
-            display: flex;
-            flex-direction: column;
-            position: relative;
+            height: calc(100vh - 65px);
             overflow: hidden;
         }
 
-        .viewport-card::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0; height: 2px;
-            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-        }
-
-        .canvas-wrapper {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 16/9;
-            background: #000;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #hudCanvas, #outputImage {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        #rawVideo {
+        /* Full Screen Interactive Video & Canvas Stage */
+        #webcamVideo {
             display: none;
         }
 
-        .hud-placeholder {
+        #holoCanvas {
             position: absolute;
-            text-align: center;
-            color: #94a3b8;
-            font-size: 1.1rem;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror view for intuitive control */
         }
 
-        .controls-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.2rem;
-            gap: 1rem;
-            flex-wrap: wrap;
+        #uiOverlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }
 
-        .btn-start {
-            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-            color: #000;
-            font-weight: 800;
-            border: none;
-            padding: 0.8rem 1.8rem;
-            border-radius: 12px;
-            font-size: 1rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
-            transition: all 0.2s ease;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+        /* Gesture Control HUD Banner (Top Left) */
+        .hud-top-left {
+            position: absolute;
+            top: 20px;
+            left: 25px;
+            background: rgba(10, 15, 30, 0.82);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 242, 254, 0.1);
+            border-radius: 14px;
+            padding: 1rem 1.2rem;
+            z-index: 20;
+            width: 290px;
         }
 
-        .btn-start:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 30px rgba(0, 242, 254, 0.7);
-        }
-
-        .btn-stop {
-            background: linear-gradient(135deg, #ff0844 0%, #ff4e50 100%);
-            color: #fff;
-            box-shadow: 0 0 20px rgba(255, 8, 68, 0.4);
-        }
-
-        .mode-toggles {
-            display: flex;
-            background: rgba(30, 41, 59, 0.7);
-            border-radius: 10px;
-            padding: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .mode-btn {
-            background: transparent;
-            color: #94a3b8;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .mode-btn.active {
-            background: var(--cyan);
-            color: #000;
-            font-weight: 800;
-        }
-
-        /* Sidebar Panels */
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 1.2rem;
-        }
-
-        .panel-card {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(20px);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 1.4rem;
-        }
-
-        .panel-title {
+        .hud-title {
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             color: var(--cyan);
             letter-spacing: 0.05em;
-            margin-bottom: 1rem;
+            margin-bottom: 0.6rem;
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
         }
 
-        /* Dominant Emotion Highlight */
-        .dominant-box {
-            text-align: center;
-            padding: 1.2rem;
-            border-radius: 12px;
-            background: rgba(0, 242, 254, 0.05);
-            border: 1px solid rgba(0, 242, 254, 0.2);
-            margin-bottom: 1rem;
-        }
-
-        .dominant-emoji {
-            font-size: 3.2rem;
-            margin-bottom: 0.2rem;
-        }
-
-        .dominant-name {
-            font-size: 1.6rem;
-            font-weight: 800;
-            color: #fff;
-            letter-spacing: -0.02em;
-        }
-
-        .dominant-conf {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.95rem;
-            color: var(--cyan);
-            margin-top: 0.2rem;
-        }
-
-        /* Emotion Bars */
-        .bar-row {
+        .gesture-pill {
             display: flex;
             align-items: center;
-            margin-bottom: 0.65rem;
-            font-size: 0.85rem;
-        }
-
-        .bar-label {
-            width: 80px;
-            color: #94a3b8;
-            font-weight: 600;
-        }
-
-        .bar-track {
-            flex: 1;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 0 0.8rem;
-        }
-
-        .bar-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, var(--cyan), var(--magenta));
-            border-radius: 4px;
-            transition: width 0.15s ease;
-        }
-
-        .bar-val {
-            width: 45px;
-            text-align: right;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            color: #cbd5e1;
-        }
-
-        /* Gesture Badges */
-        .gesture-item {
-            display: flex;
-            align-items: center;
-            gap: 0.8rem;
-            padding: 0.6rem 0.8rem;
-            background: rgba(30, 41, 59, 0.4);
+            gap: 0.6rem;
+            padding: 0.4rem 0.6rem;
+            background: rgba(255, 255, 255, 0.04);
             border-radius: 8px;
-            margin-bottom: 0.5rem;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.85rem;
+            margin-bottom: 0.4rem;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s ease;
         }
 
-        .gesture-item.active {
+        .gesture-pill.active {
             border-color: var(--magenta);
-            background: rgba(255, 8, 68, 0.15);
-            box-shadow: 0 0 10px rgba(255, 8, 68, 0.3);
+            background: rgba(255, 8, 68, 0.2);
+            box-shadow: 0 0 12px rgba(255, 8, 68, 0.4);
+            color: #fff;
+            transform: translateX(4px);
         }
 
-        .gesture-icon {
-            font-size: 1.2rem;
+        /* Dominant Emotion HUD Card (Top Right) */
+        .hud-top-right {
+            position: absolute;
+            top: 20px;
+            right: 25px;
+            background: rgba(10, 15, 30, 0.82);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 8, 68, 0.4);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 8, 68, 0.1);
+            border-radius: 14px;
+            padding: 1rem 1.4rem;
+            z-index: 20;
+            width: 320px;
         }
 
-        .telemetry-row {
+        .emotion-badge-row {
             display: flex;
-            justify-content: space-between;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: #94a3b8;
+            align-items: center;
+            gap: 1rem;
             margin-top: 0.4rem;
         }
 
-        .telemetry-val {
+        .emotion-big-emoji {
+            font-size: 2.8rem;
+        }
+
+        .emotion-big-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .emotion-big-conf {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
             color: var(--cyan);
+        }
+
+        /* Floating Tool Palette at Bottom Center */
+        .hud-bottom-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 15, 30, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(0, 242, 254, 0.1);
+            border-radius: 16px;
+            padding: 0.6rem 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 20;
+        }
+
+        .hud-btn {
+            background: rgba(0, 242, 254, 0.12);
+            color: var(--cyan);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+            padding: 0.55rem 1.2rem;
+            border-radius: 10px;
             font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .hud-btn:hover, .hud-btn.active {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 7, 17, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            gap: 1.2rem;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(0, 242, 254, 0.15);
+            border-top-color: var(--cyan);
+            border-bottom-color: var(--magenta);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <header>
         <div class="brand">
-            <h1>EMOVISION HOLO-HUD</h1>
-            <span class="status-badge" id="statusBadge"><span class="status-dot"></span> <span id="statusText">READY</span></span>
+            <h1>IRON MAN HOLO-WORKSPACE</h1>
+            <span class="status-badge" id="hudStatus"><span class="status-dot"></span> <span id="statusText">INITIALIZING AI...</span></span>
         </div>
-        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: #94a3b8;">
-            LATENCY: <span id="latencyDisplay" style="color: var(--cyan); font-weight:700;">0.0 ms</span> // FPS: <span id="fpsDisplay" style="color: var(--cyan); font-weight:700;">0.0</span>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #94a3b8;">
+            AI TRACKING: <span style="color:var(--cyan); font-weight:700;">21 LANDMARKS</span> // LATENCY: <span id="telemetryFps" style="color:var(--cyan); font-weight:700;">60.0 FPS</span>
         </div>
     </header>
 
-    <main class="container">
-        <!-- Viewport Area -->
-        <section class="viewport-card">
-            <div class="canvas-wrapper">
-                <video id="rawVideo" playsinline autoplay muted></video>
-                <img id="outputImage" alt="Holo-HUD Stream" style="display: none;">
-                <div class="hud-placeholder" id="placeholder">
-                    <p style="font-size: 2.5rem; margin-bottom: 0.5rem;">🦾</p>
-                    <p style="font-weight: 700; color: #fff;">Camera is currently offline</p>
-                    <p style="font-size: 0.9rem; margin-top: 0.3rem;">Click <strong>LAUNCH CAMERA STREAM</strong> below to start real-time Holo-HUD</p>
+    <main class="workspace-area">
+        <!-- Raw video stream -->
+        <video id="webcamVideo" playsinline autoplay muted></video>
+        <!-- Canvas for rendering Camera + Glowing Finger Connections -->
+        <canvas id="holoCanvas"></canvas>
+        <!-- UI Canvas for Air Objects & 3D Holograms -->
+        <canvas id="uiOverlayCanvas"></canvas>
+
+        <!-- Loading Overlay -->
+        <div class="loading-screen" id="loadingScreen">
+            <div class="spinner"></div>
+            <h2 style="font-family: 'Orbitron', sans-serif; color: var(--cyan); letter-spacing: 0.05em;">INITIALIZING VISION & GESTURE CORE</h2>
+            <p style="color: #94a3b8; font-size: 0.95rem;">Please allow camera access when prompted...</p>
+        </div>
+
+        <!-- Top Left Gesture Telemetry -->
+        <div class="hud-top-left">
+            <div class="hud-title">
+                <span>GESTURE TELEMETRY</span>
+                <span id="handCountBadge" style="color: #94a3b8; font-size: 0.75rem;">0 HANDS</span>
+            </div>
+            <div class="gesture-pill" id="pillPoint">
+                <span>👉</span>
+                <div><strong>AIR CURSOR</strong> (Point with Index)</div>
+            </div>
+            <div class="gesture-pill" id="pillPinch">
+                <span>🤏</span>
+                <div><strong>PINCH / HOLD</strong> (Grab & Drag Object)</div>
+            </div>
+            <div class="gesture-pill" id="pillTwoHand">
+                <span>👐</span>
+                <div><strong>TWO-HAND SCALE</strong> (Resize in Air)</div>
+            </div>
+            <div class="gesture-pill" id="pillPalm">
+                <span>🖐️</span>
+                <div><strong>OPEN PALM</strong> (Reset Workspace)</div>
+            </div>
+        </div>
+
+        <!-- Top Right Dominant Emotion Card -->
+        <div class="hud-top-right">
+            <div class="hud-title">
+                <span>FACIAL EMOTION PERCEPTION</span>
+                <span style="color: var(--magenta); font-size: 0.75rem;">LIVE CNN</span>
+            </div>
+            <div class="emotion-badge-row">
+                <div class="emotion-big-emoji" id="domEmoji">🎭</div>
+                <div>
+                    <div class="emotion-big-name" id="domName">CALIBRATING</div>
+                    <div class="emotion-big-conf" id="domConf">Confidence: 0.0%</div>
                 </div>
             </div>
+        </div>
 
-            <div class="controls-bar">
-                <button class="btn-start" id="btnToggleCam" onclick="toggleCamera()">
-                    <span>▶</span> <span id="btnCamText">LAUNCH CAMERA STREAM</span>
-                </button>
-
-                <div class="mode-toggles">
-                    <button class="mode-btn active" id="btnHolo" onclick="setMode('holo')">Hologram HUD</button>
-                    <button class="mode-btn" id="btnStandard" onclick="setMode('standard')">Standard Boxes</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- Right Telemetry Sidebar -->
-        <aside class="sidebar">
-            <!-- Dominant Card -->
-            <div class="panel-card">
-                <div class="panel-title">DOMINANT EMOTION</div>
-                <div class="dominant-box">
-                    <div class="dominant-emoji" id="domEmoji">🎭</div>
-                    <div class="dominant-name" id="domName">STANDBY</div>
-                    <div class="dominant-conf" id="domConf">Confidence: 0.0%</div>
-                </div>
-
-                <!-- Probability Spectrum Bars -->
-                <div class="panel-title" style="margin-top: 1rem;">SPECTRUM DISTRIBUTION</div>
-                <div id="barsContainer">
-                    <!-- Populated dynamically -->
-                </div>
-            </div>
-
-            <!-- Hand Gestures Active State -->
-            <div class="panel-card">
-                <div class="panel-title">GESTURE TELEMETRY</div>
-                <div class="gesture-item" id="gPinch">
-                    <span class="gesture-icon">🤏</span>
-                    <div>
-                        <div style="font-weight: 700;">PINCH CLICK</div>
-                        <div style="font-size: 0.75rem; color: #94a3b8;">Thumb & index touch</div>
-                    </div>
-                </div>
-                <div class="gesture-item" id="gPalm">
-                    <span class="gesture-icon">🖐️</span>
-                    <div>
-                        <div style="font-weight: 700;">OPEN PALM</div>
-                        <div style="font-size: 0.75rem; color: #94a3b8;">Reset active cards</div>
-                    </div>
-                </div>
-                <div class="gesture-item" id="gSwipe">
-                    <span class="gesture-icon">↔️</span>
-                    <div>
-                        <div style="font-weight: 700;">HORIZONTAL SWIPE</div>
-                        <div style="font-size: 0.75rem; color: #94a3b8;">Cycle interface mode</div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.8rem;">
-                    <div class="telemetry-row">
-                        <span>CONTROL MODE:</span>
-                        <span class="telemetry-val" id="controlModeVal">MOUSE FALLBACK</span>
-                    </div>
-                    <div class="telemetry-row">
-                        <span>FACE DETECTED:</span>
-                        <span class="telemetry-val" id="faceDetectedVal">NO</span>
-                    </div>
-                </div>
-            </div>
-        </aside>
+        <!-- Bottom Controls -->
+        <div class="hud-bottom-bar">
+            <button class="hud-btn" onclick="spawnHoloObject('cube')">
+                <span>🧊</span> SPAWN 3D HOLO CUBE
+            </button>
+            <button class="hud-btn" onclick="spawnHoloObject('orb')">
+                <span>🔮</span> SPAWN EMOTION ORB
+            </button>
+            <button class="hud-btn" onclick="resetHoloObjects()">
+                <span>🔄</span> RESET OBJECTS
+            </button>
+        </div>
     </main>
 
-    <canvas id="captureCanvas" width="640" height="480" style="display: none;"></canvas>
-
     <script>
-        const EMOTION_LIST = ["Angry", "Disgusted", "Fearful", "Happy", "Neutral", "Sad", "Surprised"];
+        const video = document.getElementById("webcamVideo");
+        const holoCanvas = document.getElementById("holoCanvas");
+        const holoCtx = holoCanvas.getContext("2d");
+        const uiCanvas = document.getElementById("uiOverlayCanvas");
+        const uiCtx = uiCanvas.getContext("2d");
+        const loadingScreen = document.getElementById("loadingScreen");
+        const statusText = document.getElementById("statusText");
+        const handCountBadge = document.getElementById("handCountBadge");
+
+        let streamWidth = 1280;
+        let streamHeight = 720;
+        let lastFrameTime = performance.now();
+        let fpsCounter = 0;
+        let fpsDisplay = 60.0;
+
+        // Emotion data received from backend
+        let currentEmotion = "Neutral";
+        let currentEmotionConfidence = 0.85;
         const EMOTION_EMOJIS = {
             "Angry": "😠", "Disgusted": "🤢", "Fearful": "😨",
             "Happy": "😄", "Neutral": "😐", "Sad": "😢", "Surprised": "😲"
         };
 
-        let isStreaming = false;
-        let streamMode = "holo";
-        let videoEl = document.getElementById("rawVideo");
-        let outputImg = document.getElementById("outputImage");
-        let captureCanvas = document.getElementById("captureCanvas");
-        let capCtx = captureCanvas.getContext("2d");
-        let placeholder = document.getElementById("placeholder");
-        let btnToggle = document.getElementById("btnToggleCam");
-        let btnCamText = document.getElementById("btnCamText");
+        // ---------------------------------------------------------------------
+        // Interactive 3D Floating Hologram Objects in Air
+        // ---------------------------------------------------------------------
+        let holoObjects = [
+            {
+                id: "holo_cube_1",
+                type: "cube",
+                x: 0.5, // Normalized [0, 1] screen coords
+                y: 0.5,
+                z: 0.0,
+                size: 140, // Base pixel size
+                targetSize: 140,
+                rotX: 0.3,
+                rotY: 0.4,
+                rotZ: 0.0,
+                isGrabbed: false,
+                grabbedHandId: null,
+                grabOffsetX: 0,
+                grabOffsetY: 0,
+                glowColor: "#00f2fe"
+            }
+        ];
 
-        let lastTime = performance.now();
-        let frameCount = 0;
-        let isProcessing = false;
+        function spawnHoloObject(type) {
+            holoObjects.push({
+                id: "holo_" + Date.now(),
+                type: type,
+                x: 0.35 + Math.random() * 0.3,
+                y: 0.35 + Math.random() * 0.3,
+                z: 0.0,
+                size: 130,
+                targetSize: 130,
+                rotX: Math.random() * Math.PI,
+                rotY: Math.random() * Math.PI,
+                rotZ: 0.0,
+                isGrabbed: false,
+                grabbedHandId: null,
+                grabOffsetX: 0,
+                grabOffsetY: 0,
+                glowColor: type === "cube" ? "#00f2fe" : "#ff0844"
+            });
+        }
 
-        // Initialize bars
-        const barsContainer = document.getElementById("barsContainer");
-        EMOTION_LIST.forEach(emo => {
-            barsContainer.innerHTML += `
-                <div class="bar-row">
-                    <div class="bar-label">${emo}</div>
-                    <div class="bar-track"><div class="bar-fill" id="bar_${emo}"></div></div>
-                    <div class="bar-val" id="val_${emo}">0%</div>
-                </div>
-            `;
+        function resetHoloObjects() {
+            holoObjects = [
+                {
+                    id: "holo_cube_1",
+                    type: "cube",
+                    x: 0.5,
+                    y: 0.5,
+                    z: 0.0,
+                    size: 140,
+                    targetSize: 140,
+                    rotX: 0.3,
+                    rotY: 0.4,
+                    rotZ: 0.0,
+                    isGrabbed: false,
+                    grabbedHandId: null,
+                    grabOffsetX: 0,
+                    grabOffsetY: 0,
+                    glowColor: "#00f2fe"
+                }
+            ];
+        }
+
+        // ---------------------------------------------------------------------
+        // MediaPipe Connections Structure (21 Landmarks)
+        // ---------------------------------------------------------------------
+        const HAND_CONNECTIONS = [
+            [0, 1], [1, 2], [2, 3], [3, 4],        // Thumb
+            [0, 5], [5, 6], [6, 7], [7, 8],        // Index
+            [5, 9], [9, 10], [10, 11], [11, 12],   // Middle
+            [9, 13], [13, 14], [14, 15], [15, 16], // Ring
+            [13, 17], [17, 18], [18, 19], [19, 20],// Pinky
+            [0, 17]                                // Palm Base
+        ];
+
+        // ---------------------------------------------------------------------
+        // MediaPipe Hands Initialization (Client-side 60 FPS GPU Pipeline)
+        // ---------------------------------------------------------------------
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        function setMode(mode) {
-            streamMode = mode;
-            document.getElementById("btnHolo").classList.toggle("active", mode === "holo");
-            document.getElementById("btnStandard").classList.toggle("active", mode === "standard");
-        }
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
 
-        async function toggleCamera() {
-            if (isStreaming) {
-                stopCamera();
-            } else {
-                await startCamera();
+        hands.onResults(onHandResults);
+
+        // Resize Canvas dynamically
+        function resizeCanvases() {
+            holoCanvas.width = window.innerWidth;
+            holoCanvas.height = window.innerHeight;
+            uiCanvas.width = window.innerWidth;
+            uiCanvas.height = window.innerHeight;
+        }
+        window.addEventListener("resize", resizeCanvases);
+        resizeCanvases();
+
+        // ---------------------------------------------------------------------
+        // Main Processing & Rendering Loop
+        // ---------------------------------------------------------------------
+        let lastHandResults = null;
+
+        function onHandResults(results) {
+            loadingScreen.style.display = "none";
+            statusText.innerText = "AIR GESTURE CORE ACTIVE";
+            lastHandResults = results;
+
+            // Calculate FPS
+            const now = performance.now();
+            fpsCounter++;
+            if (now - lastFrameTime >= 1000) {
+                fpsDisplay = (fpsCounter * 1000 / (now - lastFrameTime)).toFixed(1);
+                document.getElementById("telemetryFps").innerText = `${fpsDisplay} FPS`;
+                fpsCounter = 0;
+                lastFrameTime = now;
             }
-        }
 
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
-                    audio: false
+            const w = holoCanvas.width;
+            const h = holoCanvas.height;
+
+            // 1. Draw Mirrored Camera Video Feed on holoCanvas
+            holoCtx.save();
+            holoCtx.clearRect(0, 0, w, h);
+            holoCtx.drawImage(results.image, 0, 0, w, h);
+
+            // Darken slightly for vibrant glowing hologram contrast
+            holoCtx.fillStyle = "rgba(5, 7, 17, 0.35)";
+            holoCtx.fillRect(0, 0, w, h);
+
+            // 2. Draw Glowing Hand Skeletons & Inter-Finger Bone Connections
+            if (results.multiHandLandmarks) {
+                handCountBadge.innerText = `${results.multiHandLandmarks.length} HAND(S)`;
+
+                results.multiHandLandmarks.forEach((lms, handIdx) => {
+                    drawHandHologram(holoCtx, lms, w, h, handIdx);
                 });
-                videoEl.srcObject = stream;
-                await videoEl.play();
-
-                isStreaming = true;
-                placeholder.style.display = "none";
-                outputImg.style.display = "block";
-                btnToggle.classList.add("btn-stop");
-                btnCamText.innerText = "STOP CAMERA STREAM";
-                document.getElementById("statusText").innerText = "LIVE STREAMING";
-
-                requestAnimationFrame(processLoop);
-            } catch (err) {
-                alert("Camera Access Error: " + err.message);
+            } else {
+                handCountBadge.innerText = "0 HANDS";
             }
+            holoCtx.restore();
+
+            // 3. Clear UI Overlay Canvas
+            uiCtx.clearRect(0, 0, w, h);
+
+            // 4. Update & Render Interactive Air Objects & Cursors
+            handleAirGesturesAndObjects(results, w, h);
         }
 
-        function stopCamera() {
-            isStreaming = false;
-            if (videoEl.srcObject) {
-                videoEl.srcObject.getTracks().forEach(track => track.stop());
-                videoEl.srcObject = null;
-            }
-            placeholder.style.display = "block";
-            outputImg.style.display = "none";
-            btnToggle.classList.remove("btn-stop");
-            btnCamText.innerText = "LAUNCH CAMERA STREAM";
-            document.getElementById("statusText").innerText = "OFFLINE";
+        // ---------------------------------------------------------------------
+        // Draw Glowing Hologram Hand Skeletons & Inter-Finger Joints
+        // ---------------------------------------------------------------------
+        function drawHandHologram(ctx, lms, w, h, handIdx) {
+            const isRight = handIdx === 0;
+            const baseColor = isRight ? "#00f2fe" : "#ff0844";
+            const glowColor = isRight ? "rgba(0, 242, 254, 0.6)" : "rgba(255, 8, 68, 0.6)";
+
+            // Draw Glowing Bone Connections
+            ctx.strokeStyle = baseColor;
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 15;
+            ctx.lineWidth = 3.5;
+            ctx.lineCap = "round";
+
+            HAND_CONNECTIONS.forEach(([i, j]) => {
+                const p1 = lms[i];
+                const p2 = lms[j];
+                ctx.beginPath();
+                ctx.moveTo(p1.x * w, p1.y * h);
+                ctx.lineTo(p2.x * w, p2.y * h);
+                ctx.stroke();
+            });
+
+            // Draw Cross-finger webbing / palm web connections (Iron Man Hologram mesh)
+            ctx.strokeStyle = glowColor;
+            ctx.lineWidth = 1.2;
+            const webPairs = [[4, 8], [8, 12], [12, 16], [16, 20], [5, 17]];
+            webPairs.forEach(([i, j]) => {
+                ctx.beginPath();
+                ctx.moveTo(lms[i].x * w, lms[i].y * h);
+                ctx.lineTo(lms[j].x * w, lms[j].y * h);
+                ctx.stroke();
+            });
+
+            // Draw Glowing Landmark Nodes
+            lms.forEach((lm, idx) => {
+                const px = lm.x * w;
+                const py = lm.y * h;
+
+                // Fingertips (4, 8, 12, 16, 20) get pulsing interactive rings
+                if ([4, 8, 12, 16, 20].includes(idx)) {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.shadowColor = baseColor;
+                    ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 6, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Outer pulse ring
+                    ctx.strokeStyle = baseColor;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 11, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else {
+                    // Regular joints
+                    ctx.fillStyle = baseColor;
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
         }
 
-        async function processLoop() {
-            if (!isStreaming) return;
+        // ---------------------------------------------------------------------
+        // Air Gestures: Air Cursor, Pinch Grab, Two-Hand Resize & Object Physics
+        // ---------------------------------------------------------------------
+        function handleAirGesturesAndObjects(results, w, h) {
+            let isPinching = false;
+            let isPointing = false;
+            let isTwoHandScaling = false;
+            let isOpenPalm = false;
 
-            if (!isProcessing && videoEl.videoWidth > 0) {
-                isProcessing = true;
-                const t0 = performance.now();
+            let handPointers = [];
 
-                // Capture frame to canvas
-                captureCanvas.width = 640;
-                captureCanvas.height = 480;
-                capCtx.drawImage(videoEl, 0, 0, 640, 480);
+            if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                results.multiHandLandmarks.forEach((lms, handIdx) => {
+                    // Because video is mirrored on canvas, screenX is flipped for UI coordinates
+                    const indexTip = lms[8];
+                    const thumbTip = lms[4];
+                    const wrist = lms[0];
 
-                const dataUrl = captureCanvas.toDataURL("image/jpeg", 0.7);
-                const base64Data = dataUrl.split(",")[1];
+                    const cursorX = (1.0 - indexTip.x) * w;
+                    const cursorY = indexTip.y * h;
 
-                try {
-                    const resp = await fetch("/api/predict_hud", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ image: base64Data, mode: streamMode })
+                    const thumbX = (1.0 - thumbTip.x) * w;
+                    const thumbY = thumbTip.y * h;
+
+                    // Calculate Pinch Distance in pixels
+                    const pinchDist = Math.hypot(cursorX - thumbX, cursorY - thumbY);
+                    const pinching = pinchDist < 45;
+
+                    if (pinching) isPinching = true;
+                    isPointing = true;
+
+                    // Check Open Palm (fingers spread)
+                    const isPalm = (lms[8].y < lms[6].y && lms[12].y < lms[10].y && lms[16].y < lms[14].y && lms[20].y < lms[18].y);
+                    if (isPalm && !pinching) isOpenPalm = true;
+
+                    handPointers.push({
+                        handIdx: handIdx,
+                        cursorX: cursorX,
+                        cursorY: cursorY,
+                        thumbX: thumbX,
+                        thumbY: thumbY,
+                        pinchDist: pinchDist,
+                        pinching: pinching
                     });
 
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        outputImg.src = "data:image/jpeg;base64," + data.image;
+                    // Draw Air Laser Pointer & Targeting Crosshair
+                    drawAirCursor(uiCtx, cursorX, cursorY, pinching, handIdx);
+                });
 
-                        // Update Latency & FPS
-                        const dt = performance.now() - t0;
-                        document.getElementById("latencyDisplay").innerText = dt.toFixed(1) + " ms";
+                // Two-Hand Scale Detection
+                if (handPointers.length >= 2) {
+                    const p1 = handPointers[0];
+                    const p2 = handPointers[1];
+                    const twoHandDist = Math.hypot(p1.cursorX - p2.cursorX, p1.cursorY - p2.cursorY);
 
-                        frameCount++;
-                        const now = performance.now();
-                        if (now - lastTime >= 1000) {
-                            document.getElementById("fpsDisplay").innerText = (frameCount * 1000 / (now - lastTime)).toFixed(1);
-                            frameCount = 0;
-                            lastTime = now;
+                    // If both hands are active, scale all floating objects dynamically
+                    holoObjects.forEach(obj => {
+                        obj.targetSize = Math.max(70, Math.min(320, twoHandDist * 0.45));
+                    });
+                    isTwoHandScaling = true;
+                }
+
+                // -------------------------------------------------------------
+                // Object Drag / Hold Physics
+                // -------------------------------------------------------------
+                holoObjects.forEach(obj => {
+                    const objPxX = obj.x * w;
+                    const objPxY = obj.y * h;
+                    const radius = obj.size / 2;
+
+                    // Smooth resize lerp
+                    obj.size += (obj.targetSize - obj.size) * 0.15;
+
+                    // Continuous slow 3D rotation
+                    obj.rotX += 0.015;
+                    obj.rotY += 0.02;
+
+                    // Check if any hand pinches inside/near this object
+                    let grabbedBy = null;
+                    handPointers.forEach(p => {
+                        const distToObject = Math.hypot(p.cursorX - objPxX, p.cursorY - objPxY);
+                        if (distToObject < radius + 40 && p.pinching) {
+                            grabbedBy = p;
                         }
+                    });
 
-                        // Update Telemetry
-                        updateTelemetry(data);
+                    if (grabbedBy) {
+                        obj.isGrabbed = true;
+                        obj.x = grabbedBy.cursorX / w;
+                        obj.y = grabbedBy.cursorY / h;
+                        obj.glowColor = "#ff0844"; // Glow magenta when held in air!
+                    } else {
+                        obj.isGrabbed = false;
+                        obj.glowColor = obj.type === "cube" ? "#00f2fe" : "#4facfe";
+                    }
+                });
+            }
+
+            // Update UI Gesture Pills
+            document.getElementById("pillPoint").classList.toggle("active", isPointing);
+            document.getElementById("pillPinch").classList.toggle("active", isPinching);
+            document.getElementById("pillTwoHand").classList.toggle("active", isTwoHandScaling);
+            document.getElementById("pillPalm").classList.toggle("active", isOpenPalm);
+
+            // Render 3D Holographic Objects in Air
+            holoObjects.forEach(obj => {
+                if (obj.type === "cube") {
+                    drawHologram3DCube(uiCtx, obj.x * w, obj.y * h, obj.size, obj.rotX, obj.rotY, obj.glowColor, obj.isGrabbed);
+                } else if (obj.type === "orb") {
+                    drawHologramOrb(uiCtx, obj.x * w, obj.y * h, obj.size, obj.glowColor, obj.isGrabbed);
+                }
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // Draw Laser Pointer & Pulsing Crosshair Cursor in Mid-Air
+        // ---------------------------------------------------------------------
+        function drawAirCursor(ctx, x, y, isPinching, handIdx) {
+            const col = isPinching ? "#ff0844" : "#00f2fe";
+
+            ctx.save();
+            ctx.shadowColor = col;
+            ctx.shadowBlur = 15;
+
+            // Concentric target reticle
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, isPinching ? 18 : 12, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Center Point
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(x, y, isPinching ? 5 : 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Corner Aim Crosshairs
+            ctx.beginPath();
+            ctx.moveTo(x - 20, y); ctx.lineTo(x - 8, y);
+            ctx.moveTo(x + 8, y);  ctx.lineTo(x + 20, y);
+            ctx.moveTo(x, y - 20); ctx.lineTo(x, y - 8);
+            ctx.moveTo(x, y + 8);  ctx.lineTo(x, y + 20);
+            ctx.stroke();
+
+            // Holographic Cursor Tag
+            ctx.font = "10px 'JetBrains Mono', monospace";
+            ctx.fillStyle = col;
+            ctx.fillText(isPinching ? "HOLD // GRAB" : `POINT [${Math.round(x)},${Math.round(y)}]`, x + 16, y - 10);
+
+            ctx.restore();
+        }
+
+        // ---------------------------------------------------------------------
+        // Render 3D Holographic Wireframe Cube in Mid-Air (Iron Man Aesthetic)
+        // ---------------------------------------------------------------------
+        function drawHologram3DCube(ctx, cx, cy, size, rx, ry, glowColor, isGrabbed) {
+            ctx.save();
+            const hs = size / 2;
+
+            // 8 Cube 3D Vertices
+            const vertices = [
+                [-hs, -hs, -hs], [ hs, -hs, -hs], [ hs,  hs, -hs], [-hs,  hs, -hs],
+                [-hs, -hs,  hs], [ hs, -hs,  hs], [ hs,  hs,  hs], [-hs,  hs,  hs]
+            ];
+
+            // 3D Rotation Matrix Projection
+            const cosX = Math.cos(rx), sinX = Math.sin(rx);
+            const cosY = Math.cos(ry), sinY = Math.sin(ry);
+
+            const proj = vertices.map(([vx, vy, vz]) => {
+                // Rot Y
+                let x1 = vx * cosY - vz * sinY;
+                let z1 = vx * sinY + vz * cosY;
+                // Rot X
+                let y2 = vy * cosX - z1 * sinX;
+                let z2 = vy * sinX + z1 * cosX;
+
+                // Perspective projection
+                const fov = 350;
+                const scale = fov / (fov + z2 + 200);
+                return [cx + x1 * scale, cy + y2 * scale];
+            });
+
+            // Cube 12 Edges
+            const edges = [
+                [0, 1], [1, 2], [2, 3], [3, 0], // Back Face
+                [4, 5], [5, 6], [6, 7], [7, 4], // Front Face
+                [0, 4], [1, 5], [2, 6], [3, 7]  // Connecting Struts
+            ];
+
+            // Draw Glowing 3D Edges
+            ctx.strokeStyle = glowColor;
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = isGrabbed ? 30 : 18;
+            ctx.lineWidth = isGrabbed ? 3.5 : 2.2;
+
+            edges.forEach(([i, j]) => {
+                ctx.beginPath();
+                ctx.moveTo(proj[i][0], proj[i][1]);
+                ctx.lineTo(proj[j][0], proj[j][1]);
+                ctx.stroke();
+            });
+
+            // Draw Glowing Corner Vertex Nodes
+            ctx.fillStyle = "#ffffff";
+            proj.forEach(([px, py]) => {
+                ctx.beginPath();
+                ctx.arc(px, py, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Center Arc Energy Core
+            ctx.strokeStyle = glowColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, isGrabbed ? 20 : 12, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Holographic Status Tag
+            ctx.font = "11px 'Orbitron', sans-serif";
+            ctx.fillStyle = glowColor;
+            ctx.fillText(isGrabbed ? "⚡ HOLDING OBJECT" : "HOLO-OBJECT // PINCH TO GRAB", cx - 70, cy + hs + 25);
+
+            ctx.restore();
+        }
+
+        // ---------------------------------------------------------------------
+        // Render 3D Floating Emotion Energy Orb
+        // ---------------------------------------------------------------------
+        function drawHologramOrb(ctx, cx, cy, size, glowColor, isGrabbed) {
+            ctx.save();
+            const r = size / 2;
+
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = isGrabbed ? 35 : 20;
+
+            // Outer Energy Shell
+            ctx.strokeStyle = glowColor;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Orbiting Ring 1
+            const time = performance.now() * 0.003;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, r, r * 0.35, time, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Orbiting Ring 2
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, r, r * 0.35, -time * 1.3, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Glowing Core
+            ctx.fillStyle = glowColor;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Center Emoji
+            ctx.font = `${Math.round(r * 0.4)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(EMOTION_EMOJIS[currentEmotion] || "🔮", cx, cy);
+
+            ctx.restore();
+        }
+
+        // ---------------------------------------------------------------------
+        // Periodic Facial Emotion Prediction Call to Backend
+        // ---------------------------------------------------------------------
+        const emotionCaptureCanvas = document.createElement("canvas");
+        const emoCtx = emotionCaptureCanvas.getContext("2d");
+
+        async function triggerEmotionInference() {
+            if (video.videoWidth > 0) {
+                emotionCaptureCanvas.width = 480;
+                emotionCaptureCanvas.height = 360;
+                emoCtx.drawImage(video, 0, 0, 480, 360);
+
+                const dataUrl = emotionCaptureCanvas.toDataURL("image/jpeg", 0.65);
+                const b64 = dataUrl.split(",")[1];
+
+                try {
+                    const res = await fetch("/api/predict_face", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ image: b64 })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.dominant_emotion) {
+                            currentEmotion = data.dominant_emotion;
+                            currentEmotionConfidence = data.dominant_confidence;
+
+                            document.getElementById("domEmoji").innerText = EMOTION_EMOJIS[currentEmotion] || "🎭";
+                            document.getElementById("domName").innerText = currentEmotion.toUpperCase();
+                            document.getElementById("domConf").innerText = `Confidence: ${(currentEmotionConfidence * 100).toFixed(1)}%`;
+                        }
                     }
                 } catch (e) {
-                    console.error("Frame error:", e);
-                } finally {
-                    isProcessing = false;
+                    // pass
                 }
             }
-
-            requestAnimationFrame(processLoop);
+            setTimeout(triggerEmotionInference, 400); // 2.5 times per second
         }
 
-        function updateTelemetry(data) {
-            // Dominant
-            if (data.dominant_emotion) {
-                document.getElementById("domEmoji").innerText = EMOTION_EMOJIS[data.dominant_emotion] || "🎭";
-                document.getElementById("domName").innerText = data.dominant_emotion.toUpperCase();
-                document.getElementById("domConf").innerText = `Confidence: ${(data.dominant_confidence * 100).toFixed(1)}%`;
-                document.getElementById("faceDetectedVal").innerText = "YES (1 Face)";
-            } else {
-                document.getElementById("faceDetectedVal").innerText = "SEARCHING...";
-            }
+        // ---------------------------------------------------------------------
+        // Camera Startup
+        // ---------------------------------------------------------------------
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({ image: video });
+            },
+            width: 1280,
+            height: 720
+        });
 
-            // Probabilities
-            if (data.probabilities) {
-                for (const [emo, prob] of Object.entries(data.probabilities)) {
-                    const fill = document.getElementById("bar_" + emo);
-                    const val = document.getElementById("val_" + emo);
-                    if (fill && val) {
-                        fill.style.width = (prob * 100).toFixed(0) + "%";
-                        val.innerText = (prob * 100).toFixed(0) + "%";
-                    }
-                }
-            }
-
-            // Gestures
-            const gestures = data.gestures || [];
-            document.getElementById("gPinch").classList.toggle("active", gestures.includes("PINCH_CLICK") || gestures.includes("PINCH_HOLD") || data.pinch_active);
-            document.getElementById("gPalm").classList.toggle("active", gestures.includes("OPEN_PALM"));
-            document.getElementById("gSwipe").classList.toggle("active", gestures.includes("SWIPE_RIGHT") || gestures.includes("SWIPE_LEFT"));
-
-            if (data.fallback_active) {
-                document.getElementById("controlModeVal").innerText = "MOUSE FALLBACK";
-                document.getElementById("controlModeVal").style.color = "#f59e0b";
-            } else {
-                document.getElementById("controlModeVal").innerText = "GESTURE ACTIVE";
-                document.getElementById("controlModeVal").style.color = "#10b981";
-            }
-        }
+        camera.start().then(() => {
+            triggerEmotionInference();
+        }).catch(err => {
+            alert("Camera Initialization Failed: " + err.message);
+        });
     </script>
 </body>
 </html>
@@ -662,55 +974,27 @@ HTML_CONTENT = """<!DOCTYPE html>
 async def index():
     return HTML_CONTENT
 
-@app.post("/api/predict_hud")
-async def predict_hud(payload: FramePayload):
+@app.post("/api/predict_face")
+async def predict_face(payload: FaceFramePayload):
     try:
-        # Decode base64 image
         img_bytes = base64.b64decode(payload.image)
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if frame_bgr is None:
-            return JSONResponse({"error": "Invalid image"}, status_code=400)
+            return JSONResponse({"error": "Invalid frame"}, status_code=400)
 
-        # Mirror image for natural user interaction
-        frame_bgr = cv2.flip(frame_bgr, 1)
+        _, results = engine.process_frame(frame_bgr, draw_annotations=False)
 
-        # 1. Run Emotion Detection
-        annotated_frame, face_results = engine.process_frame(frame_bgr, draw_annotations=False)
-
-        # 2. Run Hand Tracking
-        face_bboxes = [f["bbox"] for f in face_results]
-        hands_data = hand_tracker.process_frame(frame_bgr, face_bboxes=face_bboxes)
-
-        # 3. Run Gesture Engine
-        gesture_state = gesture_engine.analyze(hands_data)
-
-        # 4. Render Output
-        if payload.mode == "holo":
-            rendered = hud_renderer.render(frame_bgr, face_results, hands_data, gesture_state)
-        else:
-            rendered, _ = engine.process_frame(frame_bgr, draw_annotations=True)
-
-        # Encode back to JPEG
-        _, buffer = cv2.imencode(".jpg", rendered, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        encoded_img = base64.b64encode(buffer).decode("utf-8")
-
-        # Telemetry data
-        dom_emo = face_results[0]["emotion"] if face_results else None
-        dom_conf = face_results[0]["confidence"] if face_results else 0.0
-        probs = face_results[0]["probabilities"] if face_results else None
+        dom_emo = results[0]["emotion"] if results else None
+        dom_conf = results[0]["confidence"] if results else 0.0
+        probs = results[0]["probabilities"] if results else None
 
         return {
-            "image": encoded_img,
             "dominant_emotion": dom_emo,
             "dominant_confidence": dom_conf,
-            "probabilities": probs,
-            "gestures": gesture_state.get("gestures", []),
-            "pinch_active": gesture_state.get("pinch_active", False),
-            "fallback_active": gesture_state.get("fallback_active", True)
+            "probabilities": probs
         }
-
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
