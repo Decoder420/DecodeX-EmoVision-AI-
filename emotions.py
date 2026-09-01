@@ -175,7 +175,17 @@ def run_display(args):
     cv2.destroyAllWindows()
     engine.detector.close()
 
-if __name__ == '__main__':
+def is_running_in_streamlit():
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        return get_script_run_ctx() is not None
+    except Exception:
+        return False
+
+if is_running_in_streamlit():
+    from app import main as run_streamlit_app
+    run_streamlit_app()
+elif __name__ == '__main__':
     args = parse_arguments()
     if args.mode == "train":
         run_training(args)
