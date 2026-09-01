@@ -441,13 +441,14 @@ def main():
     # -------------------------------------------------------------------------
     with tab_live:
         st.markdown("#### 🎥 Real-Time Continuous Webcam Feed")
-        st.write("Live, uninterrupted 60 FPS face and emotion tracking directly in your browser:")
+        st.write("Live, uninterrupted face and emotion tracking directly in your browser:")
 
         live_webcam_html = """
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="utf-8">
+            <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
             <style>
                 body {
                     margin: 0;
@@ -483,7 +484,6 @@ def main():
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    transform: scaleX(-1);
                     pointer-events: none;
                 }
                 .hud-badge {
@@ -529,7 +529,7 @@ def main():
                     padding: 10px 24px;
                     text-align: center;
                     box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-                    min-width: 220px;
+                    min-width: 240px;
                 }
                 .hud-emotion-title {
                     font-size: 18px;
@@ -574,12 +574,12 @@ def main():
                 
                 <div class="hud-badge">
                     <span class="pulse-dot"></span>
-                    <span id="fpsDisplay">LIVE STREAMING (60 FPS)</span>
+                    <span id="fpsDisplay">INITIALIZING NEURAL AI...</span>
                 </div>
 
                 <div class="hud-emotion">
-                    <div id="emoLabel" class="hud-emotion-title">😊 HAPPY</div>
-                    <div id="emoConfidence" class="hud-emotion-sub">Neural Confidence: 94.6%</div>
+                    <div id="emoLabel" class="hud-emotion-title">🔍 DETECTING FACE...</div>
+                    <div id="emoConfidence" class="hud-emotion-sub">Position your face in the camera view</div>
                 </div>
 
                 <div class="btn-row">
@@ -602,18 +602,43 @@ def main():
                 let currentFacing = 'user';
                 let lastTime = performance.now();
                 let frameCount = 0;
-                let fps = 60;
+                let fps = 30;
+                let modelsLoaded = false;
 
-                const emotionsList = [
-                    { name: '😊 HAPPY', color: '#eab308', desc: 'Positive Valence / Smile Detected' },
-                    { name: '😐 NEUTRAL', color: '#94a3b8', desc: 'Calm Baseline Expression' },
-                    { name: '😲 SURPRISED', color: '#00f2fe', desc: 'Eyebrow Elevation & Open Mouth' },
-                    { name: '😠 ANGRY', color: '#ef4444', desc: 'High Intensity Furrow' },
-                    { name: '😢 SAD', color: '#3b82f6', desc: 'Low Valence / Relaxed Contour' }
-                ];
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
 
-                let currentEmotionIdx = 0;
-                let lastEmotionChange = performance.now();
+                const metaMap = {
+                    neutral: { name: '😐 NEUTRAL', color: '#94a3b8', desc: 'Calm Baseline Expression' },
+                    happy: { name: '😊 HAPPY', color: '#eab308', desc: 'Positive Valence / Smile Detected' },
+                    sad: { name: '😢 SAD', color: '#3b82f6', desc: 'Low Valence / Relaxed Contour' },
+                    angry: { name: '😠 ANGRY', color: '#ef4444', desc: 'High Intensity Furrow' },
+                    fearful: { name: '😨 FEARFUL', color: '#a855f7', desc: 'Apprehension / Startle' },
+                    disgusted: { name: '🤢 DISGUSTED', color: '#10b981', desc: 'Aversion Expression' },
+                    surprised: { name: '😲 SURPRISED', color: '#00f2fe', desc: 'Eyebrow Elevation & Open Mouth' }
+                };
+
+                async function loadAIAndStart() {
+                    fpsDisplay.innerText = 'LOADING TENSORFLOW AI MODELS...';
+                    try {
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+                        modelsLoaded = true;
+                        fpsDisplay.innerText = 'AI LOADED // STARTING WEBCAM...';
+                        startCamera();
+                    } catch(err) {
+                        fpsDisplay.innerText = 'AI LOAD RETRYING...';
+                        try {
+                            const ALT_URL = 'https://raw.githubusercontent.com/vladmandic/face-api/master/model/';
+                            await faceapi.nets.tinyFaceDetector.loadFromUri(ALT_URL);
+                            await faceapi.nets.faceExpressionNet.loadFromUri(ALT_URL);
+                            modelsLoaded = true;
+                            startCamera();
+                        } catch(e2) {
+                            fpsDisplay.innerText = 'AI LOAD ERROR: ' + e2.message;
+                            startCamera();
+                        }
+                    }
+                }
 
                 async function startCamera() {
                     try {
@@ -658,100 +683,126 @@ def main():
                     startCamera();
                 }
 
-                function renderLoop(timestamp) {
+                async function renderLoop(timestamp) {
                     if (!isPlaying) return;
 
                     // FPS calculation
                     frameCount++;
                     if (timestamp - lastTime >= 1000) {
                         fps = Math.round((frameCount * 1000) / (timestamp - lastTime));
-                        fpsDisplay.innerText = `LIVE STREAMING (${fps} FPS)`;
+                        fpsDisplay.innerText = `LIVE NEURAL AI (${fps} FPS)`;
                         frameCount = 0;
                         lastTime = timestamp;
                     }
 
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                    // Dynamic Face Tracking simulation on live video
-                    const w = canvas.width;
-                    const h = canvas.height;
-                    const boxW = Math.round(w * 0.38);
-                    const boxH = Math.round(h * 0.52);
-                    const boxX = Math.round((w - boxW) / 2 + Math.sin(timestamp / 800) * 15);
-                    const boxY = Math.round((h - boxH) / 2 + Math.cos(timestamp / 900) * 10);
+                    if (modelsLoaded && video.readyState === 4 && !video.paused) {
+                        try {
+                            const detections = await faceapi.detectAllFaces(
+                                video,
+                                new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 })
+                            ).withFaceExpressions();
 
-                    // Periodically vary emotion detection confidence
-                    if (timestamp - lastEmotionChange > 3500) {
-                        currentEmotionIdx = Math.floor(Math.random() * emotionsList.length);
-                        lastEmotionChange = timestamp;
+                            if (detections && detections.length > 0) {
+                                for (const det of detections) {
+                                    const box = det.detection.box;
+                                    const w = canvas.width;
+                                    const h = canvas.height;
+
+                                    // Scale to canvas dimensions
+                                    const scaleX = w / (video.videoWidth || w);
+                                    const scaleY = h / (video.videoHeight || h);
+                                    
+                                    const rawW = box.width * scaleX;
+                                    const rawH = box.height * scaleY;
+                                    // Mirror coordinate matching mirrored video display:
+                                    const boxX = w - (box.x * scaleX) - rawW;
+                                    const boxY = box.y * scaleY;
+
+                                    // Get dominant emotion from actual neural network output
+                                    const expressions = det.expressions;
+                                    const sorted = Object.entries(expressions).sort((a, b) => b[1] - a[1]);
+                                    const topEmo = sorted[0][0];
+                                    const topScore = (sorted[0][1] * 100).toFixed(1);
+
+                                    const meta = metaMap[topEmo] || { name: `🎭 ${topEmo.toUpperCase()}`, color: '#00f2fe', desc: 'Active Emotion Expression' };
+
+                                    emoLabel.innerText = `${meta.name}`;
+                                    emoLabel.style.color = meta.color;
+                                    emoConfidence.innerText = `Neural Confidence: ${topScore}% | ${meta.desc}`;
+
+                                    // Draw Cyber Bounding Box HUD
+                                    ctx.save();
+                                    ctx.strokeStyle = meta.color;
+                                    ctx.lineWidth = 2.5;
+                                    ctx.shadowColor = meta.color;
+                                    ctx.shadowBlur = 12;
+
+                                    const cornerLen = Math.min(22, rawW * 0.25);
+                                    // Top-Left
+                                    ctx.beginPath();
+                                    ctx.moveTo(boxX, boxY + cornerLen);
+                                    ctx.lineTo(boxX, boxY);
+                                    ctx.lineTo(boxX + cornerLen, boxY);
+                                    ctx.stroke();
+
+                                    // Top-Right
+                                    ctx.beginPath();
+                                    ctx.moveTo(boxX + rawW - cornerLen, boxY);
+                                    ctx.lineTo(boxX + rawW, boxY);
+                                    ctx.lineTo(boxX + rawW, boxY + cornerLen);
+                                    ctx.stroke();
+
+                                    // Bottom-Left
+                                    ctx.beginPath();
+                                    ctx.moveTo(boxX, boxY + rawH - cornerLen);
+                                    ctx.lineTo(boxX, boxY + rawH);
+                                    ctx.lineTo(boxX + cornerLen, boxY + rawH);
+                                    ctx.stroke();
+
+                                    // Bottom-Right
+                                    ctx.beginPath();
+                                    ctx.moveTo(boxX + rawW - cornerLen, boxY + rawH);
+                                    ctx.lineTo(boxX + rawW, boxY + rawH);
+                                    ctx.lineTo(boxX + rawW, boxY + rawH - cornerLen);
+                                    ctx.stroke();
+
+                                    // Target crosshair
+                                    ctx.strokeStyle = 'rgba(0, 242, 254, 0.5)';
+                                    ctx.lineWidth = 1;
+                                    const cx = boxX + rawW / 2;
+                                    const cy = boxY + rawH / 2;
+                                    ctx.beginPath();
+                                    ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+                                    ctx.stroke();
+
+                                    // Clean, left-to-right readable Face Label Banner (NOT mirrored!)
+                                    const bannerText = `${meta.name} ${topScore}%`;
+                                    ctx.font = 'bold 13px sans-serif';
+                                    const textWidth = ctx.measureText(bannerText).width;
+                                    ctx.fillStyle = 'rgba(10, 15, 29, 0.88)';
+                                    ctx.fillRect(boxX, boxY - 26, textWidth + 16, 22);
+                                    ctx.fillStyle = meta.color;
+                                    ctx.fillText(bannerText, boxX + 8, boxY - 10);
+
+                                    ctx.restore();
+                                }
+                            } else {
+                                emoLabel.innerText = '🔍 DETECTING FACE...';
+                                emoLabel.style.color = '#00f2fe';
+                                emoConfidence.innerText = 'Position your face centered in the camera view';
+                            }
+                        } catch(inferErr) {
+                            // Silently continue loop
+                        }
                     }
-                    const curEmo = emotionsList[currentEmotionIdx];
-                    const conf = (91.0 + Math.sin(timestamp / 500) * 7.5).toFixed(1);
-
-                    emoLabel.innerText = curEmo.name;
-                    emoLabel.style.color = curEmo.color;
-                    emoConfidence.innerText = `Neural Confidence: ${conf}% | ${curEmo.desc}`;
-
-                    // Draw Cyber Bounding Box HUD
-                    ctx.save();
-                    ctx.strokeStyle = curEmo.color;
-                    ctx.lineWidth = 2.5;
-                    ctx.shadowColor = curEmo.color;
-                    ctx.shadowBlur = 12;
-
-                    // Corner brackets
-                    const cornerLen = 24;
-                    // Top-Left
-                    ctx.beginPath();
-                    ctx.moveTo(boxX, boxY + cornerLen);
-                    ctx.lineTo(boxX, boxY);
-                    ctx.lineTo(boxX + cornerLen, boxY);
-                    ctx.stroke();
-
-                    // Top-Right
-                    ctx.beginPath();
-                    ctx.moveTo(boxX + boxW - cornerLen, boxY);
-                    ctx.lineTo(boxX + boxW, boxY);
-                    ctx.lineTo(boxX + boxW, boxY + cornerLen);
-                    ctx.stroke();
-
-                    // Bottom-Left
-                    ctx.beginPath();
-                    ctx.moveTo(boxX, boxY + boxH - cornerLen);
-                    ctx.lineTo(boxX, boxY + boxH);
-                    ctx.lineTo(boxX + cornerLen, boxY + boxH);
-                    ctx.stroke();
-
-                    // Bottom-Right
-                    ctx.beginPath();
-                    ctx.moveTo(boxX + boxW - cornerLen, boxY + boxH);
-                    ctx.lineTo(boxX + boxW, boxY + boxH);
-                    ctx.lineTo(boxX + boxW, boxY + boxH - cornerLen);
-                    ctx.stroke();
-
-                    // Target crosshair
-                    ctx.strokeStyle = 'rgba(0, 242, 254, 0.4)';
-                    ctx.lineWidth = 1;
-                    const cx = boxX + boxW / 2;
-                    const cy = boxY + boxH / 2;
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-                    ctx.stroke();
-
-                    // Face Label Banner
-                    ctx.fillStyle = 'rgba(10, 15, 29, 0.8)';
-                    ctx.fillRect(boxX, boxY - 26, 140, 22);
-                    ctx.fillStyle = curEmo.color;
-                    ctx.font = 'bold 12px Segoe UI, sans-serif';
-                    ctx.fillText(`${curEmo.name} ${conf}%`, boxX + 6, boxY - 10);
-
-                    ctx.restore();
 
                     requestAnimationFrame(renderLoop);
                 }
 
-                // Initialize camera on page load
-                startCamera();
+                // Load models and boot camera
+                loadAIAndStart();
             </script>
         </body>
         </html>
