@@ -446,10 +446,14 @@ def main():
 
             try:
                 import av
-                from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+                from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
 
                 RTC_CONFIG = RTCConfiguration(
-                    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+                    {"iceServers": [
+                        {"urls": ["stun:stun.l.google.com:19302"]},
+                        {"urls": ["stun:stun1.l.google.com:19302"]},
+                        {"urls": ["stun:stun2.l.google.com:19302"]}
+                    ]}
                 )
 
                 class LiveStreamProcessor(VideoProcessorBase):
@@ -470,21 +474,21 @@ def main():
                             return frame
 
                 webrtc_streamer(
-                    key="decodex-emotion-stream",
+                    key="decodex-emotion-live-stream",
+                    mode=WebRtcMode.SENDRECV,
                     video_processor_factory=LiveStreamProcessor,
                     rtc_configuration=RTC_CONFIG,
                     media_stream_constraints={
                         "video": {
                             "width": {"ideal": 640},
-                            "height": {"ideal": 480},
-                            "frameRate": {"ideal": 30}
+                            "height": {"ideal": 480}
                         },
                         "audio": False
                     },
                     async_processing=True
                 )
-            except Exception:
-                st.info("💡 Real-time browser camera input (Cloud mode):")
+            except Exception as e:
+                st.info("💡 Browser camera input:")
                 live_cam = st.camera_input("Capture face from webcam", key="live_cam_fallback")
                 if live_cam is not None:
                     pil_cam = Image.open(live_cam).convert("RGB")
