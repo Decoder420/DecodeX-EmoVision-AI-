@@ -12,6 +12,35 @@ from src.hand_tracker import HandTracker
 from src.gesture_engine import GestureEngine
 from src.hud_renderer import HUDRenderer
 
+def open_camera(preferred_idx=0):
+    """
+    Tries multiple camera indices and backends (AVFoundation on macOS, V4L2/DSHOW on others)
+    to safely open the webcam.
+    """
+    backends = []
+    if sys.platform == "darwin":
+        backends = [cv2.CAP_AVFOUNDATION, cv2.CAP_ANY]
+    else:
+        backends = [cv2.CAP_ANY]
+
+    candidates = [preferred_idx, 0, 1, 2]
+    seen = set()
+
+    for backend in backends:
+        for idx in candidates:
+            if (backend, idx) in seen:
+                continue
+            seen.add((backend, idx))
+            cap = cv2.VideoCapture(idx, backend)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None and frame.size > 0:
+                    print(f"[INFO] Successfully connected to Camera #{idx} via backend {backend}.")
+                    return cap, idx
+                cap.release()
+
+    return None, None
+
 def run_desktop_hud(args):
     """
     High-framerate (60 FPS) native desktop Iron Man Holographic HUD.
@@ -27,9 +56,17 @@ def run_desktop_hud(args):
     gesture_engine = GestureEngine()
     hud_renderer = HUDRenderer()
 
-    cap = cv2.VideoCapture(args.camera)
-    if not cap.isOpened():
-        print(f"[ERROR] Could not open camera {args.camera}.")
+    cap, active_idx = open_camera(args.camera)
+    if cap is None:
+        print("\n" + "!" * 70)
+        print("[ERROR] macOS Camera Access Denied or Camera Device Not Found.")
+        print("!" * 70)
+        print("💡 Solution:")
+        print("  1. Grant Camera Permission to your Terminal / IDE:")
+        print("     Go to: System Settings -> Privacy & Security -> Camera -> Enable for your IDE/Terminal.")
+        print("  2. OR Run the In-Browser Holo-HUD on Streamlit (where browser handles camera automatically):")
+        print("     Open: http://localhost:8501 (Navigate to the '🦾 Iron Man Holo-HUD' tab)")
+        print("!" * 70 + "\n")
         return
 
     # Set camera resolution
