@@ -21,7 +21,7 @@ from src.models import EMOTION_DICT
 # Page Configuration & Styling
 # -----------------------------------------------------------------------------
 ICON_PATH = "assets/logo/decodex_icon.png"
-LOGO_PATH = "assets/logo/decodex_logo.png"
+BANNER_PATH = "assets/logo/decodex_banner.png"
 
 st.set_page_config(
     page_title="DecodeX EmoVision AI | Facial Emotion Intelligence",
@@ -37,7 +37,8 @@ def get_base64_img(img_path):
         return base64.b64encode(data).decode()
     return ""
 
-logo_b64 = get_base64_img(LOGO_PATH)
+dx_icon_b64 = get_base64_img(ICON_PATH)
+decodex_banner_b64 = get_base64_img(BANNER_PATH)
 
 # Custom Glassmorphism & Symmetrical Dark Theme tailored for DecodeX
 st.markdown(f"""
@@ -54,7 +55,7 @@ st.markdown(f"""
     
     /* Centered Symmetrical Hero Banner */
     .decodex-hero {{
-        background: linear-gradient(180deg, #0a0f1d 0%, #0d1527 50%, #080c18 100%);
+        background: linear-gradient(180deg, #090e1c 0%, #0d1527 55%, #070b16 100%);
         border-radius: 20px;
         padding: 2.2rem 2rem;
         color: white;
@@ -69,7 +70,7 @@ st.markdown(f"""
     .decodex-hero::before {{
         content: "";
         position: absolute;
-        top: 0; left: 10%; right: 10%; height: 2px;
+        top: 0; left: 15%; right: 15%; height: 2px;
         background: linear-gradient(90deg, transparent, #00f2fe, #38bdf8, transparent);
     }}
     
@@ -81,7 +82,7 @@ st.markdown(f"""
         transform: translateX(-50%);
         width: 500px;
         height: 250px;
-        background: radial-gradient(ellipse, rgba(0, 242, 254, 0.15) 0%, rgba(0,0,0,0) 70%);
+        background: radial-gradient(ellipse, rgba(0, 242, 254, 0.14) 0%, rgba(0,0,0,0) 70%);
         border-radius: 50%;
         pointer-events: none;
     }}
@@ -133,7 +134,7 @@ st.markdown(f"""
         font-weight: 700;
         border: 1px solid rgba(0, 242, 254, 0.35);
         font-family: 'JetBrains Mono', monospace;
-        margin-top: 0.4rem;
+        margin-top: 0.5rem;
     }}
     .status-dot {{
         width: 8px;
@@ -194,24 +195,16 @@ st.markdown(f"""
         box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
     }}
 
-    /* DecodeX Footer Styling */
+    /* DecodeX Clean Footer Styling */
     .decodex-footer {{
         margin-top: 3.5rem;
-        padding: 2.2rem 2rem;
+        padding: 2rem;
         border-radius: 18px;
         background: rgba(10, 15, 29, 0.75);
         backdrop-filter: blur(18px);
         border: 1px solid rgba(0, 242, 254, 0.2);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
         text-align: center;
-    }}
-    .footer-links-row {{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1.2rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.2rem;
     }}
     .footer-btn {{
         color: #cbd5e1;
@@ -226,6 +219,7 @@ st.markdown(f"""
         display: inline-flex;
         align-items: center;
         gap: 0.45rem;
+        margin-bottom: 1rem;
     }}
     .footer-btn:hover {{
         color: #00f2fe;
@@ -340,20 +334,18 @@ def plot_emotion_bars(probabilities):
 # Main Application
 # -----------------------------------------------------------------------------
 def main():
-    # Centered Symmetrical Header
-    st.markdown("""
+    # Centered Header with DecodeX Banner Logo
+    banner_img_tag = f'<img src="data:image/png;base64,{decodex_banner_b64}" style="height: 48px; object-fit: contain; margin-bottom: 0.6rem; filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.35));" alt="DecodeX Logo" />' if decodex_banner_b64 else '<h1 style="margin:0; font-family: Orbitron; color: #00f2fe;">DecodeX</h1>'
+
+    st.markdown(f"""
     <div class="decodex-hero">
         <div style="max-width: 800px; margin: 0 auto;">
-            <div style="display: flex; justify-content: center; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem;">
-                <span style="font-family: 'Orbitron', sans-serif; font-size: 1.4rem; font-weight: 900; color: #00f2fe; letter-spacing: 0.1em;">DECODEX</span>
-                <span style="color: #64748b; font-size: 1.4rem;">//</span>
-                <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.4rem; font-weight: 700; color: #f8fafc;">INTELLIGENCE</span>
-            </div>
-            <h1 style="margin: 0.1rem 0 0.4rem 0; font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em;">
+            {banner_img_tag}
+            <h1 style="margin: 0.1rem 0 0.3rem 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.01em;">
                 EmoVision <span style="color: #00f2fe; font-family: 'Orbitron', sans-serif;">AI</span>
             </h1>
-            <p style="margin: 0.2rem 0 0.8rem 0; font-size: 1.05rem; color: #94a3b8;">
-                Next-generation facial emotion perception, expression intelligence, and multi-face telemetry.
+            <p style="margin: 0.2rem 0 0.7rem 0; font-size: 1rem; color: #94a3b8;">
+                Real-time deep learning facial emotion perception, expression intelligence, and multi-face telemetry.
             </p>
             <div>
                 <span class="status-badge"><span class="status-dot"></span> NEURAL ENGINE ONLINE // 4-BLOCK CNN</span>
@@ -395,12 +387,12 @@ def main():
 
     st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
 
-    # Sidebar: DX Logo placed in Left Panel
+    # Sidebar: DX Emblem Logo in Left Panel
     with st.sidebar:
-        if logo_b64:
+        if dx_icon_b64:
             st.markdown(f"""
-            <div style="text-align: center; padding: 0.2rem 0 1.2rem 0; border-bottom: 1px solid rgba(0, 242, 254, 0.2); margin-bottom: 1.2rem;">
-                <img src="data:image/png;base64,{logo_b64}" style="max-width: 100%; height: auto; filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.35));" alt="DecodeX Logo" />
+            <div style="text-align: center; padding: 0.4rem 0 1.2rem 0; border-bottom: 1px solid rgba(0, 242, 254, 0.2); margin-bottom: 1.2rem;">
+                <img src="data:image/png;base64,{dx_icon_b64}" style="max-height: 85px; width: auto; filter: drop-shadow(0 0 18px rgba(0, 242, 254, 0.45));" alt="DX Emblem" />
             </div>
             """, unsafe_allow_html=True)
 
@@ -658,30 +650,21 @@ def main():
         """)
 
     # -------------------------------------------------------------------------
-    # DecodeX Official Footer
+    # DecodeX Clean & Minimal Footer
     # -------------------------------------------------------------------------
     st.markdown("""
     <div class="decodex-footer">
-        <div class="footer-links-row">
-            <a href="https://github.com/Decoder420" target="_blank" class="footer-btn">
-                <span>🐙 GitHub Profile</span>
-            </a>
-            <a href="https://github.com/Decoder420/DecodeX-Threat-Hunting-Platform" target="_blank" class="footer-btn">
-                <span>🛡️ Threat Hunting Platform</span>
-            </a>
-            <a href="https://github.com/Decoder420/Emotion-Detection-using-Facial-Recognition-" target="_blank" class="footer-btn">
-                <span>🎭 EmoVision AI Repository</span>
-            </a>
-        </div>
-        <div style="font-size: 0.92rem; color: #cbd5e1; margin-bottom: 0.4rem; font-weight: 500;">
+        <a href="https://github.com/Decoder420" target="_blank" class="footer-btn">
+            <span>🐙 GitHub Profile: @Decoder420</span>
+        </a>
+        <div style="font-size: 0.95rem; color: #cbd5e1; margin-bottom: 0.35rem; font-weight: 500;">
             Engineered by <strong style="color: #f8fafc;">Manan Mandal</strong> (<a href="https://github.com/Decoder420" target="_blank" style="color: #00f2fe; text-decoration: none; font-weight: 700;">@Decoder420</a>)
         </div>
         <div style="font-size: 0.8rem; color: #94a3b8; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.8rem; font-family: 'JetBrains Mono', monospace;">
             Cybersecurity • Threat Hunting • Detection Engineering • SOC Operations
         </div>
-        <div style="font-size: 0.78rem; color: #64748b; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.8rem; margin-top: 0.8rem; line-height: 1.6;">
-            Copyright © 2026 <strong>DecodeX Security Technologies Private Limited</strong>.<br>
-            Licensed under the <a href="https://github.com/Decoder420/DecodeX-Threat-Hunting-Platform/blob/main/LICENSE" target="_blank" style="color: #00f2fe; text-decoration: none;">Apache License, Version 2.0</a>.
+        <div style="font-size: 0.78rem; color: #64748b; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.8rem; margin-top: 0.5rem;">
+            Copyright © 2026 <strong>DecodeX Security Technologies Private Limited</strong>.
         </div>
     </div>
     """, unsafe_allow_html=True)
