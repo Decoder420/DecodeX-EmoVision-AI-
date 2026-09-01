@@ -657,11 +657,8 @@ def main():
         <a href="https://github.com/Decoder420" target="_blank" class="footer-btn">
             <span>🐙 GitHub Profile: @Decoder420</span>
         </a>
-        <div style="font-size: 0.95rem; color: #cbd5e1; margin-bottom: 0.35rem; font-weight: 500;">
-            Engineered by <strong style="color: #f8fafc;">Manan Mandal</strong> (<a href="https://github.com/Decoder420" target="_blank" style="color: #00f2fe; text-decoration: none; font-weight: 700;">@Decoder420</a>)
-        </div>
-        <div style="font-size: 0.8rem; color: #94a3b8; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.8rem; font-family: 'JetBrains Mono', monospace;">
-            Cybersecurity • Threat Hunting • Detection Engineering • SOC Operations
+        <div style="font-size: 0.95rem; color: #cbd5e1; margin-bottom: 0.5rem; font-weight: 500;">
+            Engineered by : <a href="https://github.com/Decoder420" target="_blank" style="color: #00f2fe; text-decoration: none; font-weight: 700;">Decoder420</a>
         </div>
         <div style="font-size: 0.78rem; color: #64748b; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.8rem; margin-top: 0.5rem;">
             Copyright © 2026 <strong>DecodeX Security Technologies Private Limited</strong>.
