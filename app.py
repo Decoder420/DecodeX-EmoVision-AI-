@@ -15,9 +15,6 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from src.inference import EmotionEngine, EMOTION_COLORS
 from src.models import EMOTION_DICT
-from src.hand_tracker import HandTracker
-from src.gesture_engine import GestureEngine
-from src.hud_renderer import HUDRenderer
 
 # -----------------------------------------------------------------------------
 # Page Configuration & Styling
@@ -270,7 +267,7 @@ def main():
                     <span class="status-badge"><span class="status-dot"></span> Online</span>
                 </div>
                 <p style="margin: 0; font-size: 1.05rem; opacity: 0.85; max-width: 650px;">
-                    Real-time deep learning facial emotion perception, touchless hand gesture telemetry, and probabilistic expression analysis.
+                    Real-time deep learning facial emotion perception, expression classification, and multi-face probability distribution analysis.
                 </p>
             </div>
             <div style="text-align: right;">
@@ -307,8 +304,8 @@ def main():
     with m4:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-value">Hand + Face</div>
-            <div class="stat-label">Gesture HUD Trackers</div>
+            <div class="stat-value">Dual Backend</div>
+            <div class="stat-label">MediaPipe + Haar</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -339,15 +336,6 @@ def main():
             st.caption(f"🔴 **Warning**: `{weights_path}` not found.")
 
         st.markdown("---")
-        st.markdown("### 🦾 Hand Gestures Guide")
-        st.markdown("""
-        - 🤏 **Pinch**: Select / Click
-        - 🖐️ **Open Palm**: Reset Panels
-        - ↔️ **Swipe**: Mode Switch
-        - 👐 **Two Hands**: Scale / Zoom
-        """)
-
-        st.markdown("---")
         st.markdown("### 🎨 Emotion Spectrum")
         for emo, meta in EMOTION_META.items():
             st.markdown(f"{meta['emoji']} **{emo}** <span style='color:{meta['color']}; font-weight:700;'>●</span>", unsafe_allow_html=True)
@@ -356,8 +344,8 @@ def main():
     engine = load_engine(model_type, detector_type, weights_path)
 
     # Interactive Navigation Tabs
-    tab_stream, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
-        "📹 Live Video Stream & Holo-HUD",
+    tab_live, tab_demo, tab_upload, tab_snapshot, tab_info = st.tabs([
+        "📹 Live Video Stream",
         "✨ One-Click Demo Faces",
         "🖼️ Image Analysis & Export",
         "📸 Camera Snapshot",
@@ -365,20 +353,13 @@ def main():
     ])
 
     # -------------------------------------------------------------------------
-    # TAB 1: Unified Live Video Stream (HUD & Standard)
+    # TAB 1: Live Video Stream
     # -------------------------------------------------------------------------
-    with tab_stream:
-        c_mode, c_help = st.columns([1.35, 0.65])
-        with c_mode:
-            view_mode = st.radio(
-                "Select Display Mode:",
-                options=["🦾 Iron Man Hologram HUD (Hand Gestures + Face Reticle)", "🎯 Standard Emotion Bounding Boxes"],
-                index=0,
-                horizontal=True
-            )
-            is_holo_mode = "Hologram" in view_mode
-
-            st.write("Click **START** below to launch live camera streaming. Position your face and try gestures!")
+    with tab_live:
+        c_stream, c_info = st.columns([1.35, 0.65])
+        with c_stream:
+            st.markdown("#### 🎥 Real-Time Facial Emotion Stream")
+            st.write("Click **START** below to stream real-time facial expression detections directly in your browser.")
 
             try:
                 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
@@ -387,48 +368,26 @@ def main():
                     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
                 )
 
-                class UnifiedStreamProcessor(VideoProcessorBase):
+                class LiveStreamProcessor(VideoProcessorBase):
                     def __init__(self):
                         self.engine = engine
-                        self.hand_tracker = HandTracker(max_num_hands=2, smooth_alpha=0.65)
-                        self.gesture_engine = GestureEngine()
-                        self.hud_renderer = HUDRenderer()
-                        self.frame_count = 0
-                        self.cached_faces = []
-                        self.holo_mode = is_holo_mode
 
                     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
                         try:
                             img = frame.to_ndarray(format="bgr24")
-                            # Resize to stable 640x480 for ultra-fluid processing
                             h, w = img.shape[:2]
                             if w > 640:
                                 scale = 640.0 / w
                                 img = cv2.resize(img, (640, int(h * scale)), interpolation=cv2.INTER_LINEAR)
-
                             img = cv2.flip(img, 1)
-                            self.frame_count += 1
-
-                            if is_holo_mode:
-                                # Cadence interleaving: face detection every 2 frames
-                                if self.frame_count % 2 == 0 or not self.cached_faces:
-                                    _, self.cached_faces = self.engine.process_frame(img, draw_annotations=False)
-
-                                face_bboxes = [f["bbox"] for f in self.cached_faces]
-                                hands_data = self.hand_tracker.process_frame(img, face_bboxes=face_bboxes)
-                                gesture_state = self.gesture_engine.analyze(hands_data)
-                                rendered = self.hud_renderer.render(img, self.cached_faces, hands_data, gesture_state)
-                            else:
-                                rendered, _ = self.engine.process_frame(img, draw_annotations=True)
-
+                            rendered, _ = self.engine.process_frame(img, draw_annotations=True)
                             return av.VideoFrame.from_ndarray(rendered, format="bgr24")
-                        except Exception as err:
-                            # If any unexpected frame error occurs, return original frame without crashing
+                        except Exception:
                             return frame
 
                 webrtc_streamer(
-                    key="unified-emotion-stream",
-                    video_processor_factory=UnifiedStreamProcessor,
+                    key="pure-emotion-stream",
+                    video_processor_factory=LiveStreamProcessor,
                     rtc_configuration=RTC_CONFIG,
                     media_stream_constraints={
                         "video": {
@@ -443,30 +402,14 @@ def main():
             except Exception as e:
                 st.error(f"Live Stream Error: {e}")
 
-        with c_help:
-            st.markdown("#### 🎮 Controls & Telemetry")
-            if is_holo_mode:
-                st.markdown("""
-                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                    <div style="font-weight: 700; color: #00f2fe;">🤏 PINCH (CLICK)</div>
-                    <div style="font-size: 0.85rem; color: #cbd5e1;">Bring thumb & index tips close together to activate the magenta click crosshair.</div>
-                </div>
-                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                    <div style="font-weight: 700; color: #ff0844;">🖐️ OPEN PALM (RESET)</div>
-                    <div style="font-size: 0.85rem; color: #cbd5e1;">Open your hand wide with all 4 fingers spread to reset floating cards.</div>
-                </div>
-                <div class="stat-card" style="text-align: left; margin-bottom: 0.8rem;">
-                    <div style="font-weight: 700; color: #34d399;">↔️ HORIZONTAL SWIPE</div>
-                    <div style="font-size: 0.85rem; color: #cbd5e1;">Move your index fingertip across the frame to switch HUD modes.</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                - **Lighting**: Ensure your face is evenly illuminated for optimal boundary detection.
-                - **Positioning**: Center your face within the camera frame.
-                - **Continuous Video Window**: For native 60 FPS hardware accelerated desktop execution, run:
-                """)
-                st.code("python emotions.py --mode display", language="bash")
+        with c_info:
+            st.markdown("#### 💡 Telemetry & Instructions")
+            st.markdown("""
+            - **Lighting**: Ensure your face is evenly illuminated for crisp boundary detection.
+            - **Positioning**: Center your face in front of the camera.
+            - **Native 60 FPS Desktop Window**: Run anytime via terminal:
+            """)
+            st.code("python emotions.py --mode display", language="bash")
 
     # -------------------------------------------------------------------------
     # TAB 2: One-Click Demo Presets
@@ -612,7 +555,7 @@ def main():
         | **Parameters** | 2,345,607 weights | Optimized for low parameter size and sub-3ms latency |
         | **Mean Inference Time** | 2.66 ms / 376 FPS | High throughput real-time execution |
         | **Face Detectors** | MediaPipe SSD & Haar Cascade | Dual backend with automatic fallback for high angle resilience |
-        | **Hand Tracking** | 21-Landmark Kinematic Engine | Real-time touchless gesture control with EMA smoothing |
+        | **Dataset & Accuracy** | FER-2013 | 63.2% Test Accuracy (CNN) / 65.8% (MobileNetV3) |
         """)
 
 if __name__ == '__main__':
