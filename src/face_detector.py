@@ -4,39 +4,41 @@ import os
 
 class FaceDetector:
     """
-    Robust Face Detector supporting both MediaPipe Face Detection and OpenCV Haar Cascade fallback.
+    Face Detector supporting MediaPipe and OpenCV Haar Cascade fallback.
     """
     def __init__(self, method="mediapipe", min_detection_confidence=0.5, cascade_path="haarcascade_frontalface_default.xml"):
         self.method = method.lower()
         self.min_detection_confidence = min_detection_confidence
         self.cascade_path = cascade_path
-        self.mp_face_detection = None
         self.detector = None
         self.haar_cascade = None
 
         if self.method == "mediapipe":
             try:
                 import mediapipe as mp
-                self.mp_face_detection = mp.solutions.face_detection
-                self.detector = self.mp_face_detection.FaceDetection(
-                    model_selection=0, # 0 for short-range faces (webcam/selfie)
-                    min_detection_confidence=self.min_detection_confidence
-                )
+                if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'face_detection'):
+                    self.mp_face_detection = mp.solutions.face_detection
+                    self.detector = self.mp_face_detection.FaceDetection(
+                        model_selection=0,
+                        min_detection_confidence=self.min_detection_confidence
+                    )
+                else:
+                    self.method = "haar"
             except Exception as e:
-                print(f"[WARN] Failed to initialize MediaPipe Face Detection ({e}). Falling back to Haar Cascade.")
+                print(f"[INFO] Using Haar Cascade detector ({e})")
                 self.method = "haar"
 
-        if self.method == "haar":
-            if not os.path.exists(self.cascade_path):
-                # Search parent dirs or default location
-                alt_paths = [
-                    os.path.join(os.path.dirname(__file__), "..", cascade_path),
-                    os.path.join(os.path.dirname(__file__), cascade_path)
-                ]
-                for p in alt_paths:
-                    if os.path.exists(p):
-                        self.cascade_path = p
-                        break
+        if self.method == "haar" or self.detector is None:
+            self.method = "haar"
+            search_paths = [
+                self.cascade_path,
+                os.path.join(os.path.dirname(__file__), "..", self.cascade_path),
+                os.path.join(os.path.dirname(__file__), self.cascade_path)
+            ]
+            for p in search_paths:
+                if os.path.exists(p):
+                    self.cascade_path = p
+                    break
             self.haar_cascade = cv2.CascadeClassifier(self.cascade_path)
 
     def detect_faces(self, frame):
@@ -48,7 +50,6 @@ class FaceDetector:
         faces = []
 
         if self.method == "mediapipe" and self.detector is not None:
-            # MediaPipe expects RGB
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = self.detector.process(rgb_frame)
 
@@ -61,13 +62,15 @@ class FaceDetector:
                     h = min(h_img - y, int(bbox.height * h_img))
                     if w > 10 and h > 10:
                         faces.append((x, y, w, h))
-        else:
-            # Haar Cascade fallback
+        
+        # If mediapipe returned no faces or haar was selected
+        if not faces and self.haar_cascade is not None:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # High-sensitivity detection parameters
             detected = self.haar_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.3,
-                minNeighbors=5,
+                scaleFactor=1.15,
+                minNeighbors=4,
                 minSize=(30, 30)
             )
             for (x, y, w, h) in detected:
@@ -77,4 +80,7 @@ class FaceDetector:
 
     def close(self):
         if self.detector is not None:
-            self.detector.close()
+            try:
+                self.detector.close()
+            except Exception:
+                pass

@@ -1,3 +1,15 @@
+---
+title: EmoVision AI Pro - Real-Time Facial Emotion Detection
+emoji: 🎭
+colorFrom: indigo
+colorTo: purple
+sdk: streamlit
+sdk_version: "1.62.0"
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # Facial Emotion Detection using Deep Learning (v2.0)
 
 A deep learning facial expression recognition system capable of classifying human facial expressions into **seven emotions** (`Angry`, `Disgusted`, `Fearful`, `Happy`, `Neutral`, `Sad`, `Surprised`) in real time from live webcam feeds, uploaded photos, or the **FER-2013** dataset.

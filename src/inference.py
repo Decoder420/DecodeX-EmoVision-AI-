@@ -35,17 +35,28 @@ class EmotionEngine:
         else:
             model = build_cnn_model(input_shape=(48, 48, 1), num_classes=7)
 
-        if os.path.exists(self.model_path):
+        # Resolve model path if in parent or relative dir
+        search_paths = [
+            self.model_path,
+            os.path.join(os.path.dirname(__file__), "..", self.model_path),
+            os.path.join(os.path.dirname(__file__), self.model_path)
+        ]
+        found_path = None
+        for p in search_paths:
+            if os.path.exists(p):
+                found_path = p
+                break
+
+        if found_path is not None:
             try:
-                if self.model_path.endswith('.h5') or self.model_path.endswith('.keras'):
-                    try:
-                        model.load_weights(self.model_path)
-                        print(f"[INFO] Loaded weights from {self.model_path}")
-                    except Exception:
-                        model = tf.keras.models.load_model(self.model_path)
-                        print(f"[INFO] Loaded model from {self.model_path}")
+                model.load_weights(found_path)
+                print(f"[INFO] Loaded model weights from {found_path}")
             except Exception as e:
-                print(f"[WARN] Could not load model from {self.model_path}: {e}")
+                print(f"[WARN] Error loading weights directly ({e}), attempting load_model...")
+                try:
+                    model = tf.keras.models.load_model(found_path)
+                except Exception as e2:
+                    print(f"[ERROR] Failed to load model weights: {e2}")
         else:
             print(f"[WARN] Model weights file not found at '{self.model_path}'. Running with uninitialized weights.")
 
@@ -55,7 +66,7 @@ class EmotionEngine:
         """
         Processes a single BGR frame/image:
         1. Detects faces
-        2. Crops & normalizes to (48, 48) using unified preprocess_face_roi
+        2. Crops & normalizes to (48, 48) using unified preprocess_face_roi with face padding
         3. Predicts emotion probabilities
         4. Draws annotations if requested
 
@@ -68,10 +79,16 @@ class EmotionEngine:
         faces = self.detector.detect_faces(frame_bgr)
         results = []
 
+        h_img, w_img = frame_bgr.shape[:2]
+
         for (x, y, w, h) in faces:
-            h_img, w_img = frame_bgr.shape[:2]
-            x1, y1 = max(0, x), max(0, y)
-            x2, y2 = min(w_img, x + w), min(h_img, y + h)
+            # Add 10% proportional padding to capture the full facial expression
+            pad_x = int(0.10 * w)
+            pad_y = int(0.10 * h)
+            x1 = max(0, x - pad_x)
+            y1 = max(0, y - pad_y)
+            x2 = min(w_img, x + w + pad_x)
+            y2 = min(h_img, y + h + pad_y)
 
             roi_gray = gray_frame[y1:y2, x1:x2]
             if roi_gray.size == 0 or roi_gray.shape[0] < 5 or roi_gray.shape[1] < 5:
@@ -97,17 +114,19 @@ class EmotionEngine:
 
             if draw_annotations:
                 color = EMOTION_COLORS.get(emotion_label, (255, 255, 255))
+                # Bounding box around detected face
                 cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), color, 2)
                 
+                # Emotion label and confidence badge
                 label_text = f"{emotion_label}: {confidence*100:.1f}%"
-                (tw, th), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                cv2.rectangle(annotated_frame, (x, max(0, y - th - 10)), (x + tw + 10, y), color, -1)
+                (tw, th), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+                cv2.rectangle(annotated_frame, (x, max(0, y - th - 10)), (x + tw + 12, y), color, -1)
                 cv2.putText(
                     annotated_frame,
                     label_text,
-                    (x + 5, max(th + 2, y - 5)),
+                    (x + 6, max(th + 2, y - 5)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
+                    0.65,
                     (255, 255, 255),
                     2,
                     cv2.LINE_AA
