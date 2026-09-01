@@ -1,8 +1,12 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-import os
 import sys
 import json
 import time
