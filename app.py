@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import time
+import base64
 import av
 import plotly.graph_objects as go
 import plotly.express as px
@@ -19,136 +20,166 @@ from src.models import EMOTION_DICT
 # -----------------------------------------------------------------------------
 # Page Configuration & Styling
 # -----------------------------------------------------------------------------
+ICON_PATH = "assets/logo/decodex_icon.png"
+LOGO_PATH = "assets/logo/decodex_logo.png"
+BADGE_PATH = "assets/logo/decodex_badge.png"
+
 st.set_page_config(
-    page_title="EmoVision AI Pro | Facial Emotion Intelligence",
-    page_icon="🎭",
+    page_title="DecodeX EmoVision AI | Facial Emotion Intelligence",
+    page_icon=ICON_PATH if os.path.exists(ICON_PATH) else "🎭",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Glassmorphism & Modern Dark Theme
-st.markdown("""
+def get_base64_img(img_path):
+    if os.path.exists(img_path):
+        with open(img_path, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    return ""
+
+logo_b64 = get_base64_img(LOGO_PATH)
+badge_b64 = get_base64_img(BADGE_PATH)
+icon_b64 = get_base64_img(ICON_PATH)
+
+# Custom Glassmorphism & Modern Dark Theme tailored for DecodeX
+st.markdown(f"""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
     
-    html, body, [class*="css"] {
+    html, body, [class*="css"] {{
         font-family: 'Plus Jakarta Sans', sans-serif;
-    }
+    }}
     
-    code, pre {
+    code, pre {{
         font-family: 'JetBrains Mono', monospace !important;
-    }
+    }}
     
     /* Top Hero Banner */
-    .hero-banner {
-        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 80%, #4338ca 100%);
+    .decodex-hero {{
+        background: linear-gradient(135deg, #090d16 0%, #0f172a 45%, #162038 85%, #0e1e38 100%);
         border-radius: 20px;
-        padding: 2.2rem 2.5rem;
+        padding: 2.2rem 2.8rem;
         color: white;
         margin-bottom: 1.8rem;
-        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 20px 45px -15px rgba(0, 242, 254, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(0, 242, 254, 0.25);
         position: relative;
         overflow: hidden;
-    }
+    }}
     
-    .hero-banner::after {
+    .decodex-hero::before {{
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, transparent, #00f2fe, #4facfe, transparent);
+    }}
+    
+    .decodex-hero::after {{
         content: "";
         position: absolute;
         top: -50%;
-        right: -20%;
-        width: 400px;
-        height: 400px;
-        background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(0,0,0,0) 70%);
+        right: -15%;
+        width: 450px;
+        height: 450px;
+        background: radial-gradient(circle, rgba(0, 242, 254, 0.18) 0%, rgba(0,0,0,0) 70%);
         border-radius: 50%;
         pointer-events: none;
-    }
+    }}
     
     /* Metric Cards */
-    .stat-card {
-        background: rgba(30, 41, 59, 0.6);
+    .stat-card {{
+        background: rgba(15, 23, 42, 0.65);
         backdrop-filter: blur(16px);
         border-radius: 14px;
         padding: 1.2rem;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border: 1px solid rgba(0, 242, 254, 0.15);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         text-align: center;
-        transition: transform 0.2s ease, border-color 0.2s ease;
-    }
-    .stat-card:hover {
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }}
+    .stat-card:hover {{
         transform: translateY(-2px);
-        border-color: rgba(99, 102, 241, 0.4);
-    }
-    .stat-value {
+        border-color: rgba(0, 242, 254, 0.5);
+        box-shadow: 0 6px 20px rgba(0, 242, 254, 0.2);
+    }}
+    .stat-value {{
         font-size: 1.8rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+        background: linear-gradient(135deg, #00f2fe 0%, #38bdf8 50%, #c084fc 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-    }
-    .stat-label {
+        font-family: 'Orbitron', sans-serif;
+        letter-spacing: 0.02em;
+    }}
+    .stat-label {{
         font-size: 0.85rem;
         color: #94a3b8;
-        font-weight: 500;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-top: 0.2rem;
-    }
+        letter-spacing: 0.06em;
+        margin-top: 0.25rem;
+    }}
     
     /* Live Status Indicator */
-    .status-badge {
+    .status-badge {{
         display: inline-flex;
         align-items: center;
         gap: 0.45rem;
-        background: rgba(16, 185, 129, 0.15);
-        color: #34d399;
+        background: rgba(0, 242, 254, 0.12);
+        color: #00f2fe;
         padding: 0.35rem 0.85rem;
         border-radius: 9999px;
         font-size: 0.85rem;
-        font-weight: 600;
-        border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    .status-dot {
+        font-weight: 700;
+        border: 1px solid rgba(0, 242, 254, 0.35);
+        font-family: 'JetBrains Mono', monospace;
+    }}
+    .status-dot {{
         width: 8px;
         height: 8px;
-        background: #10b981;
+        background: #00f2fe;
         border-radius: 50%;
-        box-shadow: 0 0 10px #10b981;
-    }
+        box-shadow: 0 0 10px #00f2fe;
+    }}
     
     /* Dominant Emotion Card */
-    .emotion-highlight-card {
-        background: rgba(15, 23, 42, 0.75);
+    .emotion-highlight-card {{
+        background: rgba(15, 23, 42, 0.8);
         border-radius: 16px;
         padding: 1.5rem;
         border: 1px solid rgba(255, 255, 255, 0.1);
         text-align: center;
         margin-bottom: 1rem;
-    }
-    .emotion-title {
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }}
+    .emotion-title {{
         font-size: 2.2rem;
         font-weight: 800;
         margin: 0.3rem 0;
-    }
+        font-family: 'Orbitron', sans-serif;
+        letter-spacing: 0.03em;
+    }}
     
     /* Custom tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
+    }}
+    .stTabs [data-baseweb="tab"] {{
         height: 48px;
         border-radius: 10px;
         padding: 0 20px;
-        background-color: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        background-color: rgba(15, 23, 42, 0.5);
+        border: 1px solid rgba(0, 242, 254, 0.12);
         font-weight: 600;
         font-size: 0.95rem;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #4338ca !important;
-        border-color: #6366f1 !important;
-        color: white !important;
-    }
+    }}
+    .stTabs [aria-selected="true"] {{
+        background-color: #0e375e !important;
+        border-color: #00f2fe !important;
+        color: #00f2fe !important;
+        box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,7 +191,7 @@ EMOTION_META = {
     "Happy": {"emoji": "😄", "color": "#eab308", "desc": "Joy, contentment, or positive emotion"},
     "Neutral": {"emoji": "😐", "color": "#94a3b8", "desc": "Calm, baseline facial expression"},
     "Sad": {"emoji": "😢", "color": "#3b82f6", "desc": "Sorrow or low valence"},
-    "Surprised": {"emoji": "😲", "color": "#ec4899", "desc": "Unexpected wonder or startle"}
+    "Surprised": {"emoji": "😲", "color": "#00f2fe", "desc": "Unexpected wonder or startle"}
 }
 
 # -----------------------------------------------------------------------------
@@ -185,9 +216,9 @@ def plot_emotion_radar(probabilities):
         r=values,
         theta=categories,
         fill='toself',
-        fillcolor='rgba(99, 102, 241, 0.35)',
-        line=dict(color='#818cf8', width=2.5),
-        marker=dict(size=6, color='#c084fc')
+        fillcolor='rgba(0, 242, 254, 0.25)',
+        line=dict(color='#00f2fe', width=2.5),
+        marker=dict(size=6, color='#38bdf8')
     ))
 
     fig.update_layout(
@@ -198,11 +229,11 @@ def plot_emotion_radar(probabilities):
                 showticklabels=True,
                 ticksuffix='%',
                 gridcolor='rgba(255, 255, 255, 0.1)',
-                linecolor='rgba(255, 255, 255, 0.1)'
+                linecolor='rgba(0, 242, 254, 0.2)'
             ),
             angularaxis=dict(
                 gridcolor='rgba(255, 255, 255, 0.1)',
-                linecolor='rgba(255, 255, 255, 0.1)',
+                linecolor='rgba(0, 242, 254, 0.2)',
                 tickfont=dict(size=11, color='#e2e8f0', family='Plus Jakarta Sans')
             ),
             bgcolor='rgba(15, 23, 42, 0.5)'
@@ -217,7 +248,7 @@ def plot_emotion_radar(probabilities):
 def plot_emotion_bars(probabilities):
     emotions = list(probabilities.keys())
     probs = [probabilities[e] * 100 for e in emotions]
-    colors = [EMOTION_META.get(e, {}).get("color", "#6366f1") for e in emotions]
+    colors = [EMOTION_META.get(e, {}).get("color", "#00f2fe") for e in emotions]
 
     fig = go.Figure(go.Bar(
         x=probs,
@@ -255,24 +286,28 @@ def plot_emotion_bars(probabilities):
 # Main Application
 # -----------------------------------------------------------------------------
 def main():
-    # Hero Header Banner
-    st.markdown("""
-    <div class="hero-banner">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    # Top Hero Banner with DecodeX Logo
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="height: 48px; object-fit: contain; margin-bottom: 0.5rem;" alt="DecodeX Logo" />' if logo_b64 else '<h1 style="margin:0; font-family: Orbitron; color: #00f2fe;">DecodeX</h1>'
+
+    st.markdown(f"""
+    <div class="decodex-hero">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem;">
             <div>
-                <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.4rem;">
-                    <h1 style="margin: 0; font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em;">
-                        🎭 EmoVision AI <span style="font-size: 1.4rem; font-weight: 600; color: #a5b4fc;">PRO</span>
-                    </h1>
-                    <span class="status-badge"><span class="status-dot"></span> Online</span>
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    {logo_html}
+                    <span class="status-badge"><span class="status-dot"></span> NEURAL ENGINE ONLINE</span>
                 </div>
-                <p style="margin: 0; font-size: 1.05rem; opacity: 0.85; max-width: 650px;">
-                    Real-time deep learning facial emotion perception, expression classification, and multi-face probability distribution analysis.
+                <h1 style="margin: 0.3rem 0 0.5rem 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.01em;">
+                    EmoVision <span style="color: #00f2fe; font-family: 'Orbitron', sans-serif;">AI</span>
+                </h1>
+                <p style="margin: 0; font-size: 1.05rem; opacity: 0.85; max-width: 680px; color: #cbd5e1;">
+                    Next-generation deep learning facial emotion perception, expression intelligence, and multi-face probability telemetry.
                 </p>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 0.85rem; color: #94a3b8;">Neural Architecture</div>
-                <div style="font-size: 1.15rem; font-weight: 700; color: #38bdf8;">Custom 4-Block CNN</div>
+            <div style="text-align: right; background: rgba(15, 23, 42, 0.5); padding: 1rem 1.4rem; border-radius: 12px; border: 1px solid rgba(0, 242, 254, 0.2);">
+                <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;">Architecture</div>
+                <div style="font-size: 1.15rem; font-weight: 800; color: #00f2fe; font-family: 'Orbitron', sans-serif;">4-Block CNN</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;">By DecodeX Intelligence</div>
             </div>
         </div>
     </div>
@@ -313,6 +348,13 @@ def main():
 
     # Sidebar Controls
     with st.sidebar:
+        if badge_b64:
+            st.markdown(f"""
+            <div style="text-align: center; margin-bottom: 1rem;">
+                <img src="data:image/png;base64,{badge_b64}" style="max-width: 170px; height: auto; filter: drop-shadow(0 0 12px rgba(0, 242, 254, 0.35));" alt="DecodeX Badge" />
+            </div>
+            """, unsafe_allow_html=True)
+
         st.markdown("### ⚙️ Engine Configuration")
         
         model_choice = st.selectbox(
@@ -386,7 +428,7 @@ def main():
                             return frame
 
                 webrtc_streamer(
-                    key="pure-emotion-stream",
+                    key="decodex-emotion-stream",
                     video_processor_factory=LiveStreamProcessor,
                     rtc_configuration=RTC_CONFIG,
                     media_stream_constraints={
@@ -448,7 +490,7 @@ def main():
                 meta = EMOTION_META.get(top_res["emotion"], {})
                 with res_c2:
                     st.markdown(f"""
-                    <div class="emotion-highlight-card" style="border-left: 4px solid {meta.get('color', '#6366f1')};">
+                    <div class="emotion-highlight-card" style="border-left: 4px solid {meta.get('color', '#00f2fe')};">
                         <div style="font-size: 2.8rem;">{meta.get('emoji', '🎭')}</div>
                         <div class="emotion-title" style="color: {meta.get('color', '#fff')};">{top_res['emotion']}</div>
                         <div style="font-size: 1.1rem; color: #cbd5e1; font-weight: 600;">Confidence: {top_res['confidence']*100:.1f}%</div>
@@ -489,7 +531,7 @@ def main():
                     for i, res in enumerate(results):
                         meta = EMOTION_META.get(res["emotion"], {})
                         st.markdown(f"""
-                        <div class="emotion-highlight-card" style="border-left: 4px solid {meta.get('color', '#6366f1')};">
+                        <div class="emotion-highlight-card" style="border-left: 4px solid {meta.get('color', '#00f2fe')};">
                             <span style="font-size: 2.2rem;">{meta.get('emoji', '🎭')}</span>
                             <div class="emotion-title" style="color: {meta.get('color', '#fff')}; font-size: 1.8rem;">
                                 Face #{i+1}: {res['emotion']}
@@ -509,7 +551,7 @@ def main():
                     st.download_button(
                         label="📥 Export Analysis Report (JSON)",
                         data=json_export,
-                        file_name="emotion_analysis_report.json",
+                        file_name="decodex_emotion_analysis_report.json",
                         mime="application/json",
                         use_container_width=True
                     )
@@ -550,9 +592,10 @@ def main():
         st.markdown("""
         | Component | Specification | Description |
         | :--- | :--- | :--- |
+        | **Platform** | DecodeX EmoVision AI | High-precision facial expression intelligence |
         | **Model Architecture** | 4-Block Sequential CNN | Conv2D(32/64/128/128) + MaxPool + Dropout + Dense(1024) + Dense(7) |
         | **Input Dimension** | $48 \\times 48 \\times 1$ | Grayscale, normalized float32 $[0.0, 1.0]$ with proportional margin |
-        | **Parameters** | 2,345,607 weights | Optimized for low parameter size and sub-3ms latency |
+        | **Parameters** | 2,345,607 weights | Optimized for sub-3ms low-latency inference |
         | **Mean Inference Time** | 2.66 ms / 376 FPS | High throughput real-time execution |
         | **Face Detectors** | MediaPipe SSD & Haar Cascade | Dual backend with automatic fallback for high angle resilience |
         | **Dataset & Accuracy** | FER-2013 | 63.2% Test Accuracy (CNN) / 65.8% (MobileNetV3) |
